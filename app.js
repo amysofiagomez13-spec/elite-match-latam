@@ -43,8 +43,7 @@ applyLanguage("es");
 const signupForm = document.getElementById("signup-form");
 const signupMessage = document.getElementById("signup-message");
 
-signupForm.addEventListener("submit", (event) => {
-  alert("El formulario está funcionando");
+signupForm.addEventListener("submit", (event) => {  
   event.preventDefault();
 
   const birthdate = document.getElementById("signup-birthdate").value;
