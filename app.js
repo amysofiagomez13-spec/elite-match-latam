@@ -35,7 +35,14 @@ document.getElementById("close-signup").addEventListener("click", () => {
 });
 
 
-document.getElementById("login").addEventListener("click", () => dialog.showModal());
+
+document.getElementById("login").addEventListener("click", () => {
+  dialog.showModal();
+  document.getElementById("dialog-title").textContent = "Iniciar sesión";
+  document.getElementById("dialog-text").textContent =
+    "Pronto conectaremos el formulario de acceso seguro.";
+});
+
 document.getElementById("close-dialog").addEventListener("click", () => dialog.close());
 dialog.addEventListener("click", e => { if (e.target === dialog) dialog.close(); });
 document.getElementById("year").textContent = new Date().getFullYear();
