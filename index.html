@@ -103,6 +103,42 @@
 
   </main>
 
+  
+<dialog id="signup-dialog" class="signup-dialog">
+  <button type="button" class="close" id="close-signup" aria-label="Cerrar">×</button>
+
+  <div class="brand-emblem">EM<span>♥</span></div>
+  <h2>Únete a Elite Match LatAm</h2>
+  <p>Crea tu cuenta y comienza a conocer personas con propósito.</p>
+
+  <form id="signup-form">
+    <label for="signup-name">Nombre completo</label>
+    <input id="signup-name" name="name" type="text"
+      autocomplete="name" placeholder="Tu nombre" required>
+
+    <label for="signup-email">Correo electrónico</label>
+    <input id="signup-email" name="email" type="email"
+      autocomplete="email" placeholder="tucorreo@ejemplo.com" required>
+
+    <label for="signup-birthdate">Fecha de nacimiento</label>
+    <input id="signup-birthdate" name="birthdate" type="date"
+      autocomplete="bday" required>
+
+    <label for="signup-password">Contraseña</label>
+    <input id="signup-password" name="password" type="password"
+      autocomplete="new-password" minlength="8"
+      placeholder="Mínimo 8 caracteres" required>
+
+    <label class="signup-consent">
+      <input id="signup-terms" type="checkbox" required>
+      Confirmo que tengo 28 años o más y acepto las condiciones de uso y la política de privacidad.
+    </label>
+
+    <button class="button primary" type="submit">Crear mi cuenta →</button>
+    <p id="signup-message" role="status"></p>
+  </form>
+</dialog>
+  
   <dialog id="message-dialog">
     <button class="close" id="close-dialog" aria-label="Cerrar">×</button>
     <h2 id="dialog-title">Próximamente</h2>
