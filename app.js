@@ -40,7 +40,7 @@ document.getElementById("close-dialog").addEventListener("click", () => dialog.c
 dialog.addEventListener("click", e => { if (e.target === dialog) dialog.close(); });
 document.getElementById("year").textContent = new Date().getFullYear();
 applyLanguage("es");
-
+console.log("La página llegó hasta la conexión de Supabase");
 const supabaseClient = window.supabase.createClient(
   "https://hcfwmqdhxmkrgfvffwor.supabase.co",
   "sb_publishable_Ec8DhxkXMr3PxDU32uMgfg_33389Fm-"
