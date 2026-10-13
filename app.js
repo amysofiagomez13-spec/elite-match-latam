@@ -21,7 +21,11 @@ function applyLanguage(code) {
   document.getElementById("language-label").textContent = code === "es" ? "Selecciona tu idioma" : "Select your language";
 }
 language.addEventListener("change", e => applyLanguage(e.target.value));
-document.getElementById("signup").addEventListener("click", () => dialog.showModal());
+
+document.getElementById("signup").addEventListener("click", () => {
+  document.getElementById("signup-dialog").showModal();
+});
+
 document.getElementById("login").addEventListener("click", () => dialog.showModal());
 document.getElementById("close-dialog").addEventListener("click", () => dialog.close());
 dialog.addEventListener("click", e => { if (e.target === dialog) dialog.close(); });
