@@ -145,7 +145,39 @@
     <p id="dialog-text">Estamos preparando esta función.</p>
   </dialog>
 
-  
+<dialog id="login-dialog" class="signup-dialog">
+  <button type="button" class="close" id="close-login" aria-label="Cerrar">×</button>
+
+  <div class="brand-emblem">EM<span>♥</span></div>
+  <h2>Iniciar sesión</h2>
+  <p>Entra a tu cuenta de Elite Match LatAm.</p>
+
+  <form id="login-form">
+    <label for="login-email">Correo electrónico</label>
+    <input
+      id="login-email"
+      type="email"
+      autocomplete="email"
+      placeholder="tucorreo@ejemplo.com"
+      required
+    >
+
+    <label for="login-password">Contraseña</label>
+    <input
+      id="login-password"
+      type="password"
+      autocomplete="current-password"
+      placeholder="Tu contraseña"
+      required
+    >
+
+    <button class="button primary" type="submit">
+      Entrar →
+    </button>
+
+    <p id="login-message" role="status"></p>
+  </form>
+</dialog>  
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="app.js"></script>
 </body>
