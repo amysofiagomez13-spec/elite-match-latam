@@ -40,7 +40,91 @@ document.getElementById("close-dialog").addEventListener("click", () => dialog.c
 dialog.addEventListener("click", e => { if (e.target === dialog) dialog.close(); });
 document.getElementById("year").textContent = new Date().getFullYear();
 applyLanguage("es");
+
+const supabaseClient = window.supabase.createClient(
+  "https://hcfwmqdhxmkrgfvffwor.supabase.co",
+  "sb_publishable_Ec8DhxkXMr3PxDU32uMgfg_33389Fm-"
+);
+
+
 const signupForm = document.getElementById("signup-form");
+const signupMessage = document.getElementById("signup-message");
+
+signupForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+
+  const name = document.getElementById("signup-name").value.trim();
+  const email = document.getElementById("signup-email").value.trim();
+  const birthdate = document.getElementById("signup-birthdate").value;
+  const password = document.getElementById("signup-password").value;
+  const terms = document.getElementById("signup-terms").checked;
+
+  if (!birthdate) {
+    signupMessage.textContent = "Ingresa tu fecha de nacimiento.";
+    return;
+  }
+
+  const today = new Date();
+  const birth = new Date(birthdate + "T00:00:00");
+  let age = today.getFullYear() - birth.getFullYear();
+
+  if (
+    today.getMonth() < birth.getMonth() ||
+    (today.getMonth() === birth.getMonth() &&
+     today.getDate() < birth.getDate())
+  ) {
+    age--;
+  }
+
+  if (birth > today || age < 28) {
+    signupMessage.textContent =
+      "Debes tener 28 años o más para unirte a Elite Match LatAm.";
+    return;
+  }
+
+  if (password.length < 8) {
+    signupMessage.textContent =
+      "La contraseña debe tener al menos 8 caracteres.";
+    return;
+  }
+
+  if (!terms) {
+    signupMessage.textContent =
+      "Debes aceptar las condiciones de uso y privacidad.";
+    return;
+  }
+
+  signupMessage.textContent = "Creando tu cuenta...";
+
+  const { data, error } = await supabaseClient.auth.signUp({
+    email,
+    password,
+    options: {
+      data: {
+        full_name: name,
+        birthdate: birthdate
+      }
+    }
+  });
+
+  if (error) {
+    signupMessage.textContent =
+      "No se pudo crear la cuenta: " + error.message;
+    return;
+  }
+
+  if (data.user && data.user.identities &&
+      data.user.identities.length === 0) {
+    signupMessage.textContent =
+      "No se pudo completar el registro. Comprueba el correo o intenta iniciar sesión.";
+    return;
+  }
+
+  signupForm.reset();
+  signupMessage.textContent =
+    "¡Registro iniciado! Revisa tu correo electrónico y confirma tu cuenta para poder iniciar sesión.";
+});
+
 const signupMessage = document.getElementById("signup-message");
 
 signupForm.addEventListener("submit", (event) => {  
