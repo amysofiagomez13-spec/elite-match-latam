@@ -117,7 +117,10 @@ width: 100vw;
 height: 100%;
 min-height: 780px;
 transform: translateX(-50%);
-background-image: url("./file_00000000ca74820eb72a9d4f3f491b01.png");
+background-image:
+  radial-gradient(circle at 75% 25%, rgba(153, 37, 69, 0.30), transparent 35%),
+  radial-gradient(circle at 15% 80%, rgba(171, 125, 49, 0.14), transparent 30%),
+  linear-gradient(135deg, #08090b 0%, #1a0b12 48%, #08090b 100%);
   background-position: center top;
   background-size: cover;
   background-repeat: no-repeat;
