@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#101114">
+  <title>Elite Match LatAm | Conexiones auténticas</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main class="welcome">
+    <header class="topbar">
+      <div class="brand-mark" aria-hidden="true">EM<span>♥</span></div>
+      <div class="brand-name">ELITE MATCH <span>LATAM</span></div>
+      <label class="language-wrap">
+        <span class="sr-only" id="language-label">Selecciona tu idioma</span>
+        <select id="language" aria-labelledby="language-label">
+          <option value="es">🇪🇸 Español</option>
+          <option value="en">🇬🇧 English</option>
+          <option value="fr">🇫🇷 Français</option>
+          <option value="pt">🇧🇷 Português</option>
+          <option value="de">🇩🇪 Deutsch</option>
+          <option value="zh-Hans">🇨🇳 中文（简体）</option>
+          <option value="zh-Hant">🇹🇼 中文（繁體）</option>
+        </select>
+      </label>
+    </header>
+
+    <section class="hero">
+      <div class="eyebrow" data-i18n="eyebrow">UNA COMUNIDAD INTERNACIONAL</div>
+      <h1 data-i18n="headline">Conexiones auténticas.<br><em>Relaciones con propósito.</em></h1>
+      <p class="intro" data-i18n="intro">Conoce personas latinas y de todo el mundo, mayores de 28 años, que también buscan una relación seria.</p>
+      <div class="features">
+        <div class="feature"><span class="feature-icon">✓</span><span data-i18n="verified">Identidad verificada</span></div>
+        <div class="feature"><span class="feature-icon">28+</span><span data-i18n="age">Solo mayores de 28 años</span></div>
+        <div class="feature"><span class="feature-icon">♡</span><span data-i18n="purpose">Relaciones con propósito</span></div>
+      </div>
+      <div class="actions">
+        <button class="button primary" id="signup" data-i18n="signup">Crear cuenta</button>
+        <button class="button secondary" id="login" data-i18n="login">Iniciar sesión</button>
+      </div>
+      <p class="notice" data-i18n="notice">La verificación y las funciones de seguridad se incorporarán en las siguientes etapas. Esta versión es una página inicial de demostración.</p>
+    </section>
+    <footer>
+      <span>© <span id="year"></span> Elite Match LatAm</span>
+      <span data-i18n="tagline">Latinoamérica y el mundo, en un solo lugar.</span>
+    </footer>
+  </main>
+  <dialog id="message-dialog">
+    <button class="close" id="close-dialog" aria-label="Cerrar">×</button>
+    <h2 id="dialog-title">Próximamente</h2>
+    <p id="dialog-text">Estamos preparando esta función.</p>
+  </dialog>
+  <script src="app.js"></script>
+</body>
+</html>
