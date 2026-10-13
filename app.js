@@ -22,9 +22,18 @@ function applyLanguage(code) {
 }
 language.addEventListener("change", e => applyLanguage(e.target.value));
 
-document.getElementById("signup").addEventListener("click", () => {
-  document.getElementById("signup-dialog").showModal();
+
+const signupButton = document.getElementById("signup");
+const signupDialog = document.getElementById("signup-dialog");
+
+signupButton.addEventListener("click", () => {
+  signupDialog.showModal();
 });
+
+document.getElementById("close-signup").addEventListener("click", () => {
+  signupDialog.close();
+});
+
 
 document.getElementById("login").addEventListener("click", () => dialog.showModal());
 document.getElementById("close-dialog").addEventListener("click", () => dialog.close());
