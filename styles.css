@@ -103,6 +103,7 @@ select {
   text-align: center;
   position: relative;
   isolation: isolate;
+  overflow: visible;
 }
 
 
