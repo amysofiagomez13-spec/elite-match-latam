@@ -105,6 +105,7 @@ select {
   isolation: isolate;
 }
 
+
 .hero::before {
   content: "";
   position: absolute;
@@ -115,7 +116,6 @@ select {
   height: 100%;
   min-height: 780px;
   transform: translateX(-50%);
-  
   background:
     linear-gradient(
       to bottom,
@@ -125,10 +125,9 @@ select {
       #050607 100%
     ),
     url("./elite-match-cartagena.png") center top / cover no-repeat;
-  
-    );
   pointer-events: none;
 }
+
 
 .brand-hero {
   margin: 0 auto 14px;
