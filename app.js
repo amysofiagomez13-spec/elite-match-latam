@@ -35,12 +35,14 @@ document.getElementById("close-signup").addEventListener("click", () => {
 });
 
 
+const loginDialog = document.getElementById("login-dialog");
 
 document.getElementById("login").addEventListener("click", () => {
-  dialog.showModal();
-  document.getElementById("dialog-title").textContent = "Iniciar sesión";
-  document.getElementById("dialog-text").textContent =
-    "Pronto conectaremos el formulario de acceso seguro.";
+  loginDialog.showModal();
+});
+
+document.getElementById("close-login").addEventListener("click", () => {
+  loginDialog.close();
 });
 
 document.getElementById("close-dialog").addEventListener("click", () => dialog.close());
@@ -130,5 +132,33 @@ signupForm.addEventListener("submit", async (event) => {
   signupForm.reset();
   signupMessage.textContent =
     "¡Registro iniciado! Revisa tu correo electrónico y confirma tu cuenta para poder iniciar sesión.";
+});
+
+const loginForm = document.getElementById("login-form");
+const loginMessage = document.getElementById("login-message");
+
+loginForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+
+  const email = document.getElementById("login-email").value.trim();
+  const password = document.getElementById("login-password").value;
+
+  loginMessage.textContent = "Verificando tus datos...";
+
+  const { data, error } = await supabaseClient.auth.signInWithPassword({
+    email,
+    password
+  });
+
+  if (error) {
+    loginMessage.textContent =
+      "No se pudo iniciar sesión. Verifica tu correo y contraseña, y confirma tu correo electrónico.";
+    return;
+  }
+
+  loginMessage.textContent =
+    "¡Bienvenido! Has iniciado sesión correctamente.";
+
+  loginForm.reset();
 });
   
