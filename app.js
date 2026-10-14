@@ -188,6 +188,37 @@ profileButton.addEventListener("click", async () => {
 document.getElementById("close-profile").addEventListener("click", () => {
   profileDialog.close();
 });
+const profileForm = document.getElementById("profile-form");
+const profileMessage = document.getElementById("profile-message");
+
+profileForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+
+  profileMessage.textContent = "Guardando tu perfil...";
+
+  const { data, error: userError } =
+    await supabaseClient.auth.getUser();
+
+  if (userError || !data.user) {
+    profileMessage.textContent = "Inicia sesión nuevamente.";
+    return;
+  }
+
+  const { error } = await supabaseClient.auth.updateUser({
+    data: {
+      full_name: document.getElementById("profile-name").value.trim(),
+      country: document.getElementById("profile-country").value.trim(),
+      description: document.getElementById("profile-description").value.trim()
+    }
+  });
+
+  if (error) {
+    profileMessage.textContent = "No se pudo guardar. Inténtalo de nuevo.";
+    return;
+  }
+
+  profileMessage.textContent = "❤️ ¡Tu perfil se guardó correctamente!";
+});
 const logoutButton = document.getElementById("logout");
 
 async function updateSessionUI() {
