@@ -173,10 +173,10 @@ async function updateSessionUI() {
   const { data } = await supabaseClient.auth.getSession();
   const user = data.session?.user;
 
-  signupButton.hidden = !!user;
-  document.getElementById("login").hidden = !!user;
-  profileButton.hidden = !user;
-  logoutButton.hidden = !user;
+  signupButton.style.display = user ? "none" : "";
+document.getElementById("login").style.display = user ? "none" : "";
+profileButton.style.display = user ? "" : "none";
+logoutButton.style.display = user ? "" : "none";
 
   if (sessionStatus) {
     sessionStatus.textContent = user
