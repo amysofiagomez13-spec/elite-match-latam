@@ -166,3 +166,42 @@ loginForm.addEventListener("submit", async (event) => {
 if (sessionStatus) {
   sessionStatus.textContent = "❤️ Sesión iniciada correctamente";
 }
+const profileButton = document.getElementById("profile");
+const logoutButton = document.getElementById("logout");
+
+async function updateSessionUI() {
+  const { data } = await supabaseClient.auth.getSession();
+  const user = data.session?.user;
+
+  signupButton.hidden = !!user;
+  document.getElementById("login").hidden = !!user;
+  profileButton.hidden = !user;
+  logoutButton.hidden = !user;
+
+  if (sessionStatus) {
+    sessionStatus.textContent = user
+      ? "❤️ Sesión iniciada correctamente"
+      : "";
+  }
+}
+
+logoutButton.addEventListener("click", async () => {
+  const { error } = await supabaseClient.auth.signOut();
+
+  if (error) {
+    alert("No se pudo cerrar la sesión. Intenta nuevamente.");
+    return;
+  }
+
+  await updateSessionUI();
+});
+
+profileButton.addEventListener("click", () => {
+  alert("Pronto podrás completar tu perfil personal.");
+});
+
+supabaseClient.auth.onAuthStateChange(() => {
+  updateSessionUI();
+});
+
+updateSessionUI();
