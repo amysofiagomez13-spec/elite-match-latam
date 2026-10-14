@@ -161,4 +161,8 @@ loginForm.addEventListener("submit", async (event) => {
 
   loginForm.reset();
 });
-  
+  const sessionStatus = document.getElementById("session-status");
+
+if (sessionStatus) {
+  sessionStatus.textContent = "❤️ Sesión iniciada correctamente";
+}
