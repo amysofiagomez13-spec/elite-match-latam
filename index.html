@@ -108,6 +108,23 @@
       <h2>Mi perfil</h2>
       <p>Completa tu información para presentarte a la comunidad.</p>
 
+      <div class="profile-photo">
+  <img
+    id="profile-avatar"
+    src=""
+    alt="Foto de perfil"
+    style="display:none; width:120px; height:120px; object-fit:cover; border-radius:50%; margin:15px auto;"
+  >
+
+  <label for="profile-photo-input">📷 Elegir foto de perfil</label>
+  <input
+    type="file"
+    id="profile-photo-input"
+    accept="image/*"
+  >
+  <p id="profile-photo-message" role="status"></p>
+      </div>
+      
       <form id="profile-form">
         <label for="profile-name">Nombre completo</label>
         <input id="profile-name" type="text" placeholder="Tu nombre" required>
