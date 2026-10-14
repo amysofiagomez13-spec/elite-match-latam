@@ -254,3 +254,115 @@ supabaseClient.auth.onAuthStateChange(() => {
 });
 
 updateSessionUI();
+
+const avatarInput = document.getElementById("profile-photo-input");
+const avatarImage = document.getElementById("profile-avatar");
+const avatarMessage = document.getElementById("profile-photo-message");
+
+// Mostrar la foto guardada del usuario
+async function loadProfileAvatar(user) {
+  if (!user) {
+    avatarImage.removeAttribute("src");
+    avatarImage.style.display = "none";
+    return;
+  }
+
+  const path = user.user_metadata?.avatar_path;
+
+  if (!path) {
+    avatarImage.removeAttribute("src");
+    avatarImage.style.display = "none";
+    return;
+  }
+
+  const { data } = supabaseClient.storage
+    .from("avatars")
+    .getPublicUrl(path);
+
+  avatarImage.src = data.publicUrl;
+  avatarImage.style.display = "block";
+}
+
+// Cargar la foto cuando se abre el perfil
+profileButton.addEventListener("click", async () => {
+  const { data, error } = await supabaseClient.auth.getUser();
+
+  if (error || !data.user) return;
+
+  await loadProfileAvatar(data.user);
+});
+
+// Subir una nueva foto
+avatarInput.addEventListener("change", async () => {
+  const file = avatarInput.files?.[0];
+
+  if (!file) return;
+
+  const { data, error: authError } =
+    await supabaseClient.auth.getUser();
+
+  if (authError || !data.user) {
+    avatarMessage.textContent = "Inicia sesión para subir tu foto.";
+    avatarInput.value = "";
+    return;
+  }
+
+  if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
+    avatarMessage.textContent = "Selecciona una imagen JPG, PNG o WEBP.";
+    avatarInput.value = "";
+    return;
+  }
+
+  if (file.size > 5 * 1024 * 1024) {
+    avatarMessage.textContent = "La imagen no puede superar los 5 MB.";
+    avatarInput.value = "";
+    return;
+  }
+
+  const user = data.user;
+  const extension = {
+    "image/jpeg": "jpg",
+    "image/png": "png",
+    "image/webp": "webp"
+  }[file.type];
+
+  const path = `${user.id}/avatar-${Date.now()}.${extension}`;
+
+  avatarMessage.textContent = "Subiendo tu foto...";
+
+  const { error: uploadError } = await supabaseClient.storage
+    .from("avatars")
+    .upload(path, file, {
+      contentType: file.type,
+      upsert: false
+    });
+
+  if (uploadError) {
+    console.error("Error al subir la foto:", uploadError);
+    avatarMessage.textContent =
+      "No se pudo subir la foto. Revisa los permisos de Storage.";
+    return;
+  }
+
+  const { error: saveError } = await supabaseClient.auth.updateUser({
+    data: { avatar_path: path }
+  });
+
+  if (saveError) {
+    console.error("Error al guardar la referencia:", saveError);
+    avatarMessage.textContent =
+      "La foto se subió, pero no se pudo guardar en el perfil.";
+    return;
+  }
+
+  await loadProfileAvatar({
+    ...user,
+    user_metadata: {
+      ...user.user_metadata,
+      avatar_path: path
+    }
+  });
+
+  avatarMessage.textContent = "❤️ ¡Tu foto de perfil se guardó correctamente!";
+});
+    
