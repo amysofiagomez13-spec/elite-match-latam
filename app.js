@@ -167,6 +167,29 @@ if (sessionStatus) {
   sessionStatus.textContent = "❤️ Sesión iniciada correctamente";
 }
 const profileButton = document.getElementById("profile");
+const profileDialog = document.getElementById("profile-dialog");
+
+profileButton.addEventListener("click", async () => {
+  const { data } = await supabaseClient.auth.getUser();
+  const user = data.user;
+
+  if (user) {
+    document.getElementById("profile-name").value =
+      user.user_metadata?.full_name || "";
+
+    document.getElementById("profile-country").value =
+      user.user_metadata?.country || "";
+
+    document.getElementById("profile-description").value =
+      user.user_metadata?.description || "";
+  }
+
+  profileDialog.showModal();
+});
+
+document.getElementById("close-profile").addEventListener("click", () => {
+  profileDialog.close();
+});
 const logoutButton = document.getElementById("logout");
 
 async function updateSessionUI() {
