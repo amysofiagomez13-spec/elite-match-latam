@@ -163,9 +163,7 @@ loginForm.addEventListener("submit", async (event) => {
 });
   const sessionStatus = document.getElementById("session-status");
 
-if (sessionStatus) {
-  sessionStatus.textContent = "❤️ Sesión iniciada correctamente";
-}
+
 const profileButton = document.getElementById("profile");
 const profileDialog = document.getElementById("profile-dialog");
 
@@ -219,9 +217,6 @@ logoutButton.addEventListener("click", async () => {
   await updateSessionUI();
 });
 
-profileButton.addEventListener("click", () => {
-  alert("Pronto podrás completar tu perfil personal.");
-});
 
 supabaseClient.auth.onAuthStateChange(() => {
   updateSessionUI();
