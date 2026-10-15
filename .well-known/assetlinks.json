@@ -1,1 +1,12 @@
-
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "app.netlify.elite_match_latam.twa",
+      "sha256_cert_fingerprints": [
+        "D3:D1:B2:B6:F2:74:F3:D4:86:5A:F6:6D:B2:7E:77:60:6D:3F:EF:D2:0B:80:76:58:20:86:87:11:B7:BD:46:E2"
+      ]
+    }
+  }
+]
