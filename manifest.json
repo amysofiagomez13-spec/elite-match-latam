@@ -1,0 +1,13 @@
+
+{
+  "id": "/",
+  "name": "ELITE MATCH LATAM",
+  "short_name": "Elite Match",
+  "description": "Comunidad internacional para mayores de 28 años que buscan conexiones auténticas y relaciones serias.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#ffffff",
+  "theme_color": "#08090b"
+}
