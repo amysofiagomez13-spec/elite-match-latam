@@ -1,0 +1,274 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#08090b">
+  <meta name="description" content="Elite Match LatAm: conexiones auténticas y relaciones con propósito para mayores de 28 años.">
+  <title>Elite Match LatAm | Conexiones auténticas</title>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="polish.css">
+  <link rel="stylesheet" href="social.css">
+  <link rel="manifest" href="manifest.json">
+</head>
+<body>
+  <main class="welcome">
+
+    <header class="topbar">
+      <div class="brand-mark" aria-label="Logotipo Elite Match">EM<span>♥</span></div>
+      <div class="brand-name">ELITE MATCH <span>LATAM</span></div>
+
+      <label class="language-wrap">
+        <span class="sr-only" id="language-label">Selecciona tu idioma</span>
+        <select id="language" aria-labelledby="language-label">
+          <option value="es">🌐 Español</option>
+          <option value="en">🌐 English</option>
+          <option value="fr">🌐 Français</option>
+          <option value="pt">🌐 Português</option>
+          <option value="de">🌐 Deutsch</option>
+          <option value="zh-Hans">🌐 中文（简体）</option>
+          <option value="zh-Hant">🌐 中文（繁體）</option>
+        </select>
+      </label>
+    </header>
+
+    <section class="hero">
+
+      <div class="brand-hero" aria-label="Elite Match LatAm">
+        <div class="brand-emblem">EM<span>♥</span></div>
+        <div class="brand-hero-name">ELITE MATCH</div>
+        <div class="brand-hero-latam">LATAM</div>
+      </div>
+
+      <div class="eyebrow" data-i18n="eyebrow">
+        UNA COMUNIDAD INTERNACIONAL
+      </div>
+
+      <h1 data-i18n="headline">
+        Conexiones auténticas.
+        <br>
+        <em>Relaciones con propósito.</em>
+      </h1>
+      <p id="session-status" role="status" aria-live="polite"></p>
+
+      <p class="intro" data-i18n="intro">
+        Conoce personas latinas y de todo el mundo, mayores de 28 años,
+        que también buscan una relación seria.
+      </p>
+
+      <div class="features">
+        <div class="feature">
+          <span class="feature-icon">♢</span>
+          <span data-i18n="verified">Identidad verificada</span>
+        </div>
+
+        <div class="feature">
+          <span class="feature-icon">28+</span>
+          <span data-i18n="age">Solo mayores de 28 años</span>
+        </div>
+
+        <div class="feature">
+          <span class="feature-icon">◎</span>
+          <span data-i18n="purpose">Latinos y extranjeros</span>
+        </div>
+
+        <div class="feature">
+          <span class="feature-icon">♙</span>
+          <span>Privacidad y seguridad</span>
+        </div>
+      </div>
+
+      <div class="actions">
+        <button class="button primary" id="signup" data-i18n="signup">
+          Crear cuenta <span aria-hidden="true">→</span>
+        </button>
+
+        <button class="button secondary" id="login" data-i18n="login">
+          Iniciar sesión
+        </button>
+
+        <!-- NUEVO: aparece solo con la sesión iniciada (lo controla social.js) -->
+        <button class="button primary" id="enter-community" style="display:none">
+          Entrar a la comunidad
+        </button>
+
+        <button class="button primary" id="profile" hidden>
+          Mi perfil
+        </button>
+
+        <button class="button secondary" id="logout" hidden>
+          Cerrar sesión
+        </button>
+      </div>
+
+      <p class="notice" data-i18n="notice">
+        La verificación y las funciones de seguridad se incorporarán
+        en las siguientes etapas. Esta versión es una página inicial
+        de demostración.
+      </p>
+
+    </section>
+
+    <dialog id="profile-dialog" class="signup-dialog">
+      <button type="button" class="close" id="close-profile" aria-label="Cerrar">×</button>
+
+      <div class="brand-emblem">EM<span>♥</span></div>
+      <h2>Mi perfil</h2>
+      <p>Completa tu información para presentarte a la comunidad.</p>
+
+      <div class="profile-photo">
+        <img
+          id="profile-avatar"
+          src=""
+          alt="Foto de perfil"
+          style="display:none; width:120px; height:120px; object-fit:cover; border-radius:50%; margin:15px auto;"
+        >
+
+        <label for="profile-photo-input">📷 Elegir foto de perfil</label>
+        <input
+          type="file"
+          id="profile-photo-input"
+          accept="image/*"
+        >
+        <p id="profile-photo-message" role="status"></p>
+      </div>
+
+      <form id="profile-form">
+        <label for="profile-name">Nombre completo</label>
+        <input id="profile-name" type="text" placeholder="Tu nombre" required>
+
+        <label for="profile-country">País de residencia</label>
+        <input id="profile-country" type="text" placeholder="Tu país">
+
+        <label for="profile-description">Sobre mí</label>
+        <textarea id="profile-description" rows="4" maxlength="500" placeholder="Cuéntanos un poco sobre ti"></textarea>
+
+        <button class="button primary" type="submit">Guardar perfil →</button>
+        <p id="profile-message" role="status"></p>
+      </form>
+    </dialog>
+
+    <footer>
+      <span>© <span id="year"></span> Elite Match LatAm</span>
+      <span data-i18n="tagline">
+        Latinoamérica y el mundo, en un solo lugar.
+      </span>
+    </footer>
+
+  </main>
+
+  <!-- NUEVO: comunidad (Descubrir, Coincidencias y Chat) -->
+  <section id="community" class="community" hidden aria-label="Comunidad">
+    <header class="c-top">
+      <button type="button" class="c-icon" id="c-home" aria-label="Volver">←</button>
+      <div class="c-title" id="c-title">Descubrir</div>
+      <button type="button" class="c-icon" id="c-more" aria-label="Más opciones" hidden>⋯</button>
+    </header>
+
+    <div class="c-body">
+      <div id="c-menu" hidden>
+        <button type="button" id="c-block">Bloquear</button>
+        <button type="button" id="c-report">Reportar</button>
+      </div>
+
+      <div id="v-discover" class="c-view"></div>
+      <div id="v-matches" class="c-view" hidden></div>
+      <div id="v-chat" class="c-view" hidden>
+        <p class="c-muted" style="text-align:center;font-size:12px">Cuida tus datos personales: nunca compartas contraseñas ni dinero.</p>
+        <div id="chat-msgs" role="log" aria-live="polite"></div>
+        <form id="chat-form">
+          <input id="chat-text" type="text" maxlength="2000" autocomplete="off" aria-label="Escribe un mensaje" placeholder="Escribe un mensaje">
+          <button type="submit" class="c-btn gold">Enviar</button>
+        </form>
+      </div>
+    </div>
+
+    <p id="c-toast" class="c-toast" role="status"></p>
+
+    <nav class="c-tabs" aria-label="Comunidad">
+      <button type="button" data-tab="discover" aria-current="page">Descubrir</button>
+      <button type="button" data-tab="matches">Coincidencias</button>
+      <button type="button" id="c-profile">Perfil</button>
+    </nav>
+  </section>
+
+  <dialog id="signup-dialog" class="signup-dialog">
+    <button type="button" class="close" id="close-signup" aria-label="Cerrar">×</button>
+
+    <div class="brand-emblem">EM<span>♥</span></div>
+    <h2>Únete a Elite Match LatAm</h2>
+    <p>Crea tu cuenta y comienza a conocer personas con propósito.</p>
+
+    <form id="signup-form">
+      <label for="signup-name">Nombre completo</label>
+      <input id="signup-name" name="name" type="text"
+        autocomplete="name" placeholder="Tu nombre" required>
+
+      <label for="signup-email">Correo electrónico</label>
+      <input id="signup-email" name="email" type="email"
+        autocomplete="email" placeholder="tucorreo@ejemplo.com" required>
+
+      <label for="signup-birthdate">Fecha de nacimiento</label>
+      <input id="signup-birthdate" name="birthdate" type="date"
+        autocomplete="bday" required>
+
+      <label for="signup-password">Contraseña</label>
+      <input id="signup-password" name="password" type="password"
+        autocomplete="new-password" minlength="8"
+        placeholder="Mínimo 8 caracteres" required>
+
+      <label class="signup-consent">
+        <input id="signup-terms" type="checkbox" required>
+        Confirmo que tengo 28 años o más y acepto las condiciones de uso y la política de privacidad.
+      </label>
+
+      <button class="button primary" type="submit">Crear mi cuenta →</button>
+      <p id="signup-message" role="status"></p>
+    </form>
+  </dialog>
+
+  <dialog id="message-dialog">
+    <button class="close" id="close-dialog" aria-label="Cerrar">×</button>
+    <h2 id="dialog-title">Próximamente</h2>
+    <p id="dialog-text">Estamos preparando esta función.</p>
+  </dialog>
+
+  <dialog id="login-dialog" class="signup-dialog">
+    <button type="button" class="close" id="close-login" aria-label="Cerrar">×</button>
+
+    <div class="brand-emblem">EM<span>♥</span></div>
+    <h2>Iniciar sesión</h2>
+    <p>Entra a tu cuenta de Elite Match LatAm.</p>
+
+    <form id="login-form">
+      <label for="login-email">Correo electrónico</label>
+      <input
+        id="login-email"
+        type="email"
+        autocomplete="email"
+        placeholder="tucorreo@ejemplo.com"
+        required
+      >
+
+      <label for="login-password">Contraseña</label>
+      <input
+        id="login-password"
+        type="password"
+        autocomplete="current-password"
+        placeholder="Tu contraseña"
+        required
+      >
+
+      <button class="button primary" type="submit">
+        Entrar →
+      </button>
+
+      <p id="login-message" role="status"></p>
+    </form>
+  </dialog>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="app.js"></script>
+  <script src="social.js"></script>
+</body>
+</html>
