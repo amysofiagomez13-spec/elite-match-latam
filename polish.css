@@ -1,0 +1,123 @@
+/* polish.css — se carga DESPUÉS de styles.css. Usa tus variables (--gold,
+   --gold-light, --line, --muted, --text) y solo mejora los diálogos de perfil,
+   registro e inicio de sesión. No cambia ids ni clases: app.js sigue igual. */
+
+.signup-dialog {
+  width: min(92vw, 420px);
+  max-height: calc(100dvh - 32px);
+  overflow-y: auto;
+  box-sizing: border-box;
+  padding: 24px;
+}
+
+/* Formulario en una columna: etiqueta arriba, campo debajo */
+.signup-dialog form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-top: 16px;
+  text-align: left;
+}
+
+.signup-dialog form > label:not(.signup-consent) {
+  display: block;
+  margin: 0 0 -8px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.signup-dialog input:not([type="checkbox"]):not([type="file"]),
+.signup-dialog textarea {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 48px;
+  padding: 0 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #0b0c0f;
+  color: var(--text);
+  font-size: 16px;
+  line-height: 1.4;
+  font-family: inherit;
+}
+
+.signup-dialog textarea {
+  padding: 12px 14px;
+  min-height: 110px;
+  resize: none;
+}
+
+.signup-dialog input:focus-visible,
+.signup-dialog textarea:focus-visible {
+  outline: 2px solid var(--gold-light);
+  outline-offset: 2px;
+}
+
+/* Casilla de consentimiento */
+.signup-consent {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  min-height: 44px;
+  font-size: 14px;
+  line-height: 1.4;
+  color: var(--muted);
+}
+
+.signup-consent input {
+  width: 22px;
+  height: 22px;
+  flex: none;
+  accent-color: var(--gold);
+}
+
+/* Foto de perfil: el selector de archivo queda oculto y la etiqueta
+   se ve como un botón (el input sigue funcionando y es accesible) */
+.profile-photo {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  margin: 12px 0 4px;
+}
+
+.profile-photo label[for="profile-photo-input"] {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 0 20px;
+  border: 1px solid var(--gold);
+  border-radius: 999px;
+  color: var(--gold-light);
+  font-size: 15px;
+  cursor: pointer;
+}
+
+.profile-photo input[type="file"] {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.profile-photo:has(input:focus-visible) label[for="profile-photo-input"] {
+  outline: 2px solid var(--gold-light);
+  outline-offset: 3px;
+}
+
+/* Botones y mensajes de estado */
+.signup-dialog .button {
+  width: 100%;
+  min-height: 52px;
+}
+
+.signup-dialog [role="status"] {
+  min-height: 20px;
+  margin: 0;
+  text-align: center;
+  font-size: 14px;
+}
