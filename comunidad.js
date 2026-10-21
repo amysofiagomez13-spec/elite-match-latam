@@ -442,4 +442,46 @@
     $("c-menu").hidden = true;
     say("Gracias. Revisaremos tu reporte.");
   });
+
+  /* ---------- Eliminar cuenta ---------- */
+  const delBtn = $("delete-account");
+  if (delBtn) {
+    delBtn.addEventListener("click", async () => {
+      const msg = $("delete-message");
+      const typed = (prompt("Esto borra tu cuenta, tu perfil, tus fotos, estados y mensajes. No se puede deshacer.\n\nPara confirmar escribe ELIMINAR:") || "").trim();
+      if (typed !== "ELIMINAR") return;
+      delBtn.disabled = true;
+      msg.textContent = "Eliminando tu cuenta…";
+
+      const { data: u } = await sb.auth.getUser();
+      const user = u.user;
+      if (!user) { msg.textContent = "Inicia sesión de nuevo."; delBtn.disabled = false; return; }
+
+      // 1. Reunir las rutas de sus fotos antes de borrar nada
+      const paths = new Set();
+      try {
+        const { data: files } = await sb.storage.from("avatars").list(user.id, { limit: 1000 });
+        (files || []).forEach((f) => paths.add(user.id + "/" + f.name));
+        if (user.user_metadata?.avatar_path) paths.add(user.user_metadata.avatar_path);
+        const { data: sts } = await sb.from("statuses").select("image_path");
+        (sts || []).forEach((s) => s.image_path && paths.add(s.image_path));
+      } catch (e) { console.error(e); }
+
+      // 2. Borrar la cuenta (y en cascada perfil, estados, likes, coincidencias y mensajes)
+      const { error } = await sb.rpc("delete_my_account");
+      if (error) {
+        console.error(error);
+        msg.textContent = "No se pudo eliminar la cuenta. Escríbenos para ayudarte.";
+        delBtn.disabled = false;
+        return;
+      }
+
+      // 3. Borrar las fotos (mejor esfuerzo) y cerrar la sesión
+      try { if (paths.size) await sb.storage.from("avatars").remove([...paths]); } catch (e) { console.error(e); }
+      await sb.auth.signOut({ scope: "local" });
+      $("profile-dialog")?.close();
+      closeCommunity();
+      alert("Tu cuenta fue eliminada.");
+    });
+  }
 })();
