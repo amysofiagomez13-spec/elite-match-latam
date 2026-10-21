@@ -428,7 +428,19 @@
     if (seen.has(m.id)) return;
     seen.add(m.id);
     const box = $("chat-msgs");
-    box.append(el("div", "c-msg " + (m.sender_id === me.id ? "s" : "r"), m.body));
+    const bubble = el("div", "c-msg " + (m.sender_id === me.id ? "s" : "r"));
+    if (m.image_path) {
+      const img = document.createElement("img");
+      img.className = "c-msg-img";
+      img.alt = "Foto enviada";
+      bubble.append(img);
+      sb.storage.from("chat-photos").createSignedUrl(m.image_path, 3600).then(({ data }) => {
+        if (data) img.src = data.signedUrl;
+        box.scrollTop = box.scrollHeight;
+      });
+    }
+    if (m.body) bubble.append(el("span", "", m.body));
+    box.append(bubble);
     box.scrollTop = box.scrollHeight;
   }
 
@@ -442,7 +454,7 @@
 
     const { data, error } = await sb
       .from("messages")
-      .select("id,sender_id,body,created_at")
+      .select("id,sender_id,body,image_path,created_at")
       .eq("match_id", m.match_id)
       .order("created_at", { ascending: true })
       .limit(200);
@@ -466,7 +478,7 @@
     const { data, error } = await sb
       .from("messages")
       .insert({ match_id: current.match_id, sender_id: me.id, body })
-      .select("id,sender_id,body,created_at")
+      .select("id,sender_id,body,image_path,created_at")
       .single();
     if (error) {
       console.error(error);
@@ -522,7 +534,7 @@
     accessBar.hidden = false;
     if (left > 0) {
       accessBar.className = "c-access";
-      accessBar.textContent = "Prueba gratis: te quedan " + Math.floor(left / 3600) + " h " + Math.floor((left % 3600) / 60) + " min";
+      accessBar.textContent = "Prueba gratis: te quedan " + Math.floor(left / 3600) + " h " + Math.floor((left % 3600) / 60) + " min · Fotos: " + access.photos_left + " de 3";
     } else {
       accessBar.className = "c-access ended";
       accessBar.textContent = "Tu prueba gratuita terminó. Suscríbete para seguir usando fotos y llamadas.";
@@ -536,6 +548,64 @@
     clearInterval(accessTimer);
     accessTimer = setInterval(paintAccess, 30000);
   }
+
+  /* ---------- Fotos en el chat ---------- */
+  const chatForm = $("chat-form");
+  const photoInput = document.createElement("input");
+  photoInput.type = "file";
+  photoInput.accept = "image/jpeg,image/png,image/webp";
+  photoInput.className = "sr-only";
+  const photoBtn = el("button", "c-photo", "Foto");
+  photoBtn.type = "button";
+  photoBtn.setAttribute("aria-label", "Enviar una foto");
+  chatForm.prepend(photoBtn);
+  chatForm.append(photoInput);
+
+  const photoError = (e) => {
+    const m = String((e && e.message) || "");
+    if (m.includes("limite_fotos")) return "Ya usaste tus 3 fotos de la prueba gratuita.";
+    if (m.includes("fotos_requieren_suscripcion")) return "Las fotos requieren suscripción.";
+    return "No se pudo enviar la foto.";
+  };
+
+  photoBtn.addEventListener("click", () => {
+    if (access && !access.subscribed && access.photos_left <= 0) {
+      say(access.in_trial ? "Ya no tienes fotos disponibles en la prueba gratuita." : "Las fotos requieren suscripción.");
+      return;
+    }
+    photoInput.click();
+  });
+
+  photoInput.addEventListener("change", async () => {
+    const f = photoInput.files[0];
+    photoInput.value = "";
+    if (!f || !current) return;
+    if (!["image/jpeg", "image/png", "image/webp"].includes(f.type)) { say("Usa una imagen JPG, PNG o WEBP."); return; }
+    if (f.size > 5 * 1024 * 1024) { say("La foto no puede superar los 5 MB."); return; }
+    photoBtn.disabled = true;
+    say("Enviando foto…");
+    const ext = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp" }[f.type];
+    const path = me.id + "/" + current.match_id + "/" + Date.now() + "." + ext;
+    const up = await sb.storage.from("chat-photos").upload(path, f, { contentType: f.type, upsert: false });
+    if (up.error) { console.error(up.error); say("No se pudo subir la foto."); photoBtn.disabled = false; return; }
+    const { data, error } = await sb
+      .from("messages")
+      .insert({ match_id: current.match_id, sender_id: me.id, body: "", image_path: path })
+      .select("id,sender_id,body,image_path,created_at")
+      .single();
+    if (error) {
+      console.error(error);
+      await sb.storage.from("chat-photos").remove([path]);
+      say(photoError(error));
+      photoBtn.disabled = false;
+      loadAccess();
+      return;
+    }
+    addMsg(data);
+    say("Foto enviada.");
+    photoBtn.disabled = false;
+    loadAccess();
+  });
 
   /* ---------- Eliminar cuenta ---------- */
   const delBtn = $("delete-account");
@@ -561,6 +631,12 @@
         (sts || []).forEach((s) => s.image_path && paths.add(s.image_path));
       } catch (e) { console.error(e); }
 
+      const chatPaths = [];
+      try {
+        const { data: ms } = await sb.from("messages").select("image_path").eq("sender_id", user.id).not("image_path", "is", null);
+        (ms || []).forEach((m) => chatPaths.push(m.image_path));
+      } catch (e) { console.error(e); }
+
       // 2. Borrar la cuenta (y en cascada perfil, estados, likes, coincidencias y mensajes)
       const { error } = await sb.rpc("delete_my_account");
       if (error) {
@@ -572,6 +648,7 @@
 
       // 3. Borrar las fotos (mejor esfuerzo) y cerrar la sesión
       try { if (paths.size) await sb.storage.from("avatars").remove([...paths]); } catch (e) { console.error(e); }
+      try { if (chatPaths.length) await sb.storage.from("chat-photos").remove(chatPaths); } catch (e) { console.error(e); }
       await sb.auth.signOut({ scope: "local" });
       $("profile-dialog")?.close();
       closeCommunity();
