@@ -139,6 +139,7 @@
   enter.addEventListener("click", async () => {
     await syncProfile();
     loadAccess();
+    cleanupExpiredStatuses();
     community.hidden = false;
     document.body.style.overflow = "hidden";
     showTab("discover");
@@ -255,6 +256,17 @@
   }
 
   /* ---------- Estados (24 horas) ---------- */
+  // Borra los estados vencidos de la propia persona (y sus fotos) al entrar
+  async function cleanupExpiredStatuses() {
+    try {
+      const { data } = await sb.from("statuses").select("id,image_path").lt("expires_at", new Date().toISOString());
+      if (!data || !data.length) return;
+      const paths = data.map((s) => s.image_path).filter(Boolean);
+      if (paths.length) await sb.storage.from("avatars").remove(paths);
+      await sb.from("statuses").delete().in("id", data.map((s) => s.id));
+    } catch (e) { console.error(e); }
+  }
+
   function expiresIn(iso) {
     const h = Math.ceil(24 - (Date.now() - new Date(iso).getTime()) / 3600000);
     return h <= 1 ? "vence en menos de 1 h" : "vence en " + h + " h";
@@ -664,7 +676,7 @@
 
     parts.push(el("h3", "c-sub", "Qué incluye"));
     const ul = el("ul", "c-benefits");
-    ["Fotos en el chat sin límite", "Llamadas y videollamadas (próximamente)", "Sin restricciones después de las 48 horas"].forEach((t) => ul.append(el("li", "", t)));
+    ["Fotos en el chat sin límite", "Llamadas y videollamadas (próximamente)"].forEach((t) => ul.append(el("li", "", t)));
     parts.push(ul);
 
     parts.push(el("h3", "c-sub", "Elige un plan"));
@@ -739,4 +751,11 @@
       alert("Tu cuenta fue eliminada.");
     });
   }
+
+  /* Portada: no prometer verificación de identidad hasta que exista */
+  try {
+    const t = { es: "Reportes y bloqueos", en: "Reports and blocking", fr: "Signalement et blocage", pt: "Denúncias e bloqueio", de: "Melden und Blockieren", "zh-Hans": "举报与屏蔽", "zh-Hant": "檢舉與封鎖" };
+    Object.keys(t).forEach((k) => { if (translations[k]) translations[k].verified = t[k]; });
+    applyLanguage(document.getElementById("language").value);
+  } catch (e) { console.error(e); }
 })();
