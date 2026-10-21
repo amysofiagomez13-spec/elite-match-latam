@@ -22,6 +22,7 @@
   let banner = null; // aviso de perfil incompleto en Descubrir
   let access = null; // estado de la prueba gratuita y la suscripción
   let accessTimer = null;
+  let view = "discover"; // pantalla abierta
 
   function say(msg) {
     toastBox.textContent = msg;
@@ -94,8 +95,13 @@
   statusTab.dataset.tab = "status";
   community.querySelector('.c-tabs button[data-tab="matches"]').after(statusTab);
 
-  const views = { discover: $("v-discover"), matches: $("v-matches"), chat: $("v-chat"), status: vStatus };
-  const titles = { discover: "Descubrir", matches: "Coincidencias", status: "Estados" };
+  const vPlans = el("div", "c-view");
+  vPlans.id = "v-plans";
+  vPlans.hidden = true;
+  vStatus.after(vPlans);
+
+  const views = { discover: $("v-discover"), matches: $("v-matches"), chat: $("v-chat"), status: vStatus, plans: vPlans };
+  const titles = { discover: "Descubrir", matches: "Coincidencias", status: "Estados", plans: "Planes" };
 
   function leaveChat() {
     if (channel) { sb.removeChannel(channel); channel = null; }
@@ -105,6 +111,7 @@
   }
 
   function showView(name) {
+    view = name;
     Object.entries(views).forEach(([k, v]) => (v.hidden = k !== name));
     $("c-title").textContent = titles[name] || (current ? current.full_name : "Chat");
     document.querySelectorAll(".c-tabs button[data-tab]").forEach((b) => {
@@ -119,6 +126,7 @@
     if (name === "discover") loadDiscover();
     if (name === "matches") loadMatches();
     if (name === "status") loadStatuses();
+    if (name === "plans") loadPlans();
   }
 
   function closeCommunity() {
@@ -136,7 +144,11 @@
     showTab("discover");
   });
 
-  $("c-home").addEventListener("click", () => (current ? showTab("matches") : closeCommunity()));
+  $("c-home").addEventListener("click", () => {
+    if (current) showTab("matches");
+    else if (view === "plans") showTab("discover");
+    else closeCommunity();
+  });
   community.querySelectorAll(".c-tabs button[data-tab]").forEach((b) =>
     b.addEventListener("click", () => showTab(b.dataset.tab))
   );
@@ -525,19 +537,31 @@
 
   /* ---------- Prueba gratuita de 48 horas ---------- */
   const accessBar = el("div", "c-access");
+  const accessText = el("span", "");
+  const accessBtn = el("button", "c-link", "Ver planes");
+  accessBtn.type = "button";
+  accessBtn.addEventListener("click", () => showTab("plans"));
+  accessBar.append(accessText, accessBtn);
   accessBar.hidden = true;
   community.querySelector(".c-top").after(accessBar);
 
+  const fmtDate = (iso) => new Date(iso).toLocaleDateString("es-CO", { day: "numeric", month: "long", year: "numeric" });
+
   function paintAccess() {
-    if (!access || access.subscribed) { accessBar.hidden = true; return; }
-    const left = Math.max(0, Math.floor((new Date(access.trial_ends_at).getTime() - Date.now()) / 1000));
+    if (!access) { accessBar.hidden = true; return; }
     accessBar.hidden = false;
+    if (access.subscribed) {
+      accessBar.className = "c-access";
+      accessText.textContent = "Suscripción activa hasta el " + fmtDate(access.subscribed_until) + ".";
+      return;
+    }
+    const left = Math.max(0, Math.floor((new Date(access.trial_ends_at).getTime() - Date.now()) / 1000));
     if (left > 0) {
       accessBar.className = "c-access";
-      accessBar.textContent = "Prueba gratis: te quedan " + Math.floor(left / 3600) + " h " + Math.floor((left % 3600) / 60) + " min · Fotos: " + access.photos_left + " de 3";
+      accessText.textContent = "Prueba gratis: te quedan " + Math.floor(left / 3600) + " h " + Math.floor((left % 3600) / 60) + " min · Fotos: " + access.photos_left + " de 3.";
     } else {
       accessBar.className = "c-access ended";
-      accessBar.textContent = "Tu prueba gratuita terminó. Suscríbete para seguir usando fotos y llamadas.";
+      accessText.textContent = "Tu prueba gratuita terminó. Suscríbete para seguir usando fotos y llamadas.";
     }
   }
 
@@ -606,6 +630,66 @@
     photoBtn.disabled = false;
     loadAccess();
   });
+
+  /* ---------- Planes y suscripción (modo de prueba) ---------- */
+  async function loadPlans() {
+    const box = views.plans;
+    box.replaceChildren(el("p", "c-empty", "Cargando…"));
+    await loadAccess();
+    const { data: plans, error } = await sb.from("plans").select("id,name,days,price_cop").eq("active", true).order("days");
+    if (error) {
+      console.error(error);
+      box.replaceChildren(el("p", "c-empty", "No se pudieron cargar los planes."));
+      return;
+    }
+    const parts = [];
+    const status = el("div", "c-mine");
+    if (access && access.subscribed) {
+      status.append(el("small", "c-muted", "Tu suscripción"), el("p", "", "Activa hasta el " + fmtDate(access.subscribed_until) + "."));
+      if (access.is_tester) {
+        const stop = el("button", "c-btn ghost", "Terminar suscripción de prueba");
+        stop.type = "button";
+        stop.addEventListener("click", async () => {
+          const { error: err } = await sb.rpc("cancel_test_subscription");
+          if (err) { console.error(err); say("No se pudo terminar la suscripción de prueba."); return; }
+          say("Suscripción de prueba terminada.");
+          loadPlans();
+        });
+        status.append(stop);
+      }
+    } else {
+      status.append(el("small", "c-muted", "Tu cuenta"), el("p", "", access && access.in_trial ? "Prueba gratuita en curso." : "Tu prueba gratuita terminó."));
+    }
+    parts.push(status);
+
+    parts.push(el("h3", "c-sub", "Qué incluye"));
+    const ul = el("ul", "c-benefits");
+    ["Fotos en el chat sin límite", "Llamadas y videollamadas (próximamente)", "Sin restricciones después de las 48 horas"].forEach((t) => ul.append(el("li", "", t)));
+    parts.push(ul);
+
+    parts.push(el("h3", "c-sub", "Elige un plan"));
+    (plans || []).forEach((p) => {
+      const card = el("div", "c-plan");
+      card.append(el("b", "", p.name), el("small", "c-muted", p.days + " días"));
+      card.append(el("p", "", p.price_cop ? "$" + Number(p.price_cop).toLocaleString("es-CO") + " COP" : "Precio por definir"));
+      const buy = el("button", "c-btn gold", "Suscribirme");
+      buy.type = "button";
+      buy.addEventListener("click", () => subscribe(p));
+      card.append(buy);
+      parts.push(card);
+    });
+    if (!(plans || []).length) parts.push(el("p", "c-empty", "Aún no hay planes disponibles."));
+    box.replaceChildren(...parts);
+  }
+
+  async function subscribe(p) {
+    if (!access || !access.is_tester) { say("El pago estará disponible pronto."); return; }
+    if (!confirm("Modo de prueba: se activa sin cobrar. ¿Activar el plan " + p.name + "?")) return;
+    const { error } = await sb.rpc("activate_test_subscription", { p_plan: p.id });
+    if (error) { console.error(error); say("No se pudo activar la suscripción de prueba."); return; }
+    say("Suscripción de prueba activada.");
+    loadPlans();
+  }
 
   /* ---------- Eliminar cuenta ---------- */
   const delBtn = $("delete-account");
