@@ -135,7 +135,7 @@
   async function loadDiscover() {
     const box = views.discover;
     box.replaceChildren(el("p", "c-empty", "Buscando perfiles…"));
-    const { data, error } = await sb.from("discover_profiles").select("*").limit(30);
+    const { data, error } = await sb.rpc("get_discover_profiles").limit(30);
     if (error) {
       console.error(error);
       box.replaceChildren(el("p", "c-empty", "No se pudieron cargar los perfiles. Inténtalo de nuevo."));
@@ -143,7 +143,7 @@
     }
     deck = data || [];
     if (deck.length) {
-      const { data: st } = await sb.from("active_statuses").select("id,user_id,body,image_path").in("user_id", deck.map((p) => p.id));
+      const { data: st } = await sb.rpc("get_active_statuses").select("id,user_id,body,image_path").in("user_id", deck.map((p) => p.id));
       const map = new Map((st || []).map((s) => [s.user_id, s]));
       deck.forEach((p) => {
         const s = map.get(p.id);
@@ -199,7 +199,7 @@
       btn.disabled = false;
       return;
     }
-    const { data } = await sb.from("my_matches").select("match_id").eq("other_id", p.id).maybeSingle();
+    const { data } = await sb.rpc("get_my_matches").select("match_id").eq("other_id", p.id).maybeSingle();
     say(data ? "¡Es una coincidencia! Ya pueden escribirse." : "Me gusta enviado.");
     deck.shift();
     renderCard();
@@ -225,7 +225,7 @@
   async function loadStatuses() {
     const box = views.status;
     box.replaceChildren(el("p", "c-empty", "Cargando…"));
-    const { data, error } = await sb.from("active_statuses").select("*").order("created_at", { ascending: false }).limit(50);
+    const { data, error } = await sb.rpc("get_active_statuses").select("*").order("created_at", { ascending: false }).limit(50);
     if (error) {
       console.error(error);
       box.replaceChildren(el("p", "c-empty", "No se pudieron cargar los estados."));
@@ -331,7 +331,7 @@
   async function loadMatches() {
     const box = views.matches;
     box.replaceChildren(el("p", "c-empty", "Cargando…"));
-    const { data, error } = await sb.from("my_matches").select("*").order("created_at", { ascending: false });
+    const { data, error } = await sb.rpc("get_my_matches").select("*").order("created_at", { ascending: false });
     if (error) {
       console.error(error);
       box.replaceChildren(el("p", "c-empty", "No se pudieron cargar tus coincidencias."));
