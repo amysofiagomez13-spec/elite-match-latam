@@ -29,6 +29,9 @@
     toastTimer = setTimeout(() => (toastBox.textContent = ""), 3500);
   }
 
+  const BLOCK_MSG = "No se permite compartir teléfonos, redes sociales, correos o enlaces, ni pedir dinero.";
+  const isBlocked = (e) => !!e && String(e.message || "").includes("contenido_no_permitido");
+
   function avatar(path, name, extra) {
     const box = el("div", "c-av " + (extra || ""));
     if (path) {
@@ -64,7 +67,10 @@
     if (m.avatar_path) patch.avatar_path = m.avatar_path;
     if (Object.keys(patch).length) {
       const { error } = await sb.from("profiles").update(patch).eq("id", u.id);
-      if (error) console.error("No se pudo sincronizar el perfil:", error);
+      if (error) {
+        console.error("No se pudo sincronizar el perfil:", error);
+        if (isBlocked(error)) alert("Tu descripción no puede incluir teléfonos, redes sociales, correos o enlaces, ni pedir dinero. Edítala en Mi perfil.");
+      }
     }
   }
 
@@ -331,7 +337,7 @@
       if (err) {
         console.error(err);
         if (image_path) await sb.storage.from("avatars").remove([image_path]);
-        say("No se pudo publicar tu estado.");
+        say(isBlocked(err) ? BLOCK_MSG : "No se pudo publicar tu estado.");
         pub.disabled = false;
         return;
       }
@@ -465,7 +471,7 @@
     if (error) {
       console.error(error);
       input.value = body;
-      say("No se pudo enviar el mensaje.");
+      say(isBlocked(error) ? BLOCK_MSG : "No se pudo enviar el mensaje.");
       return;
     }
     addMsg(data);
