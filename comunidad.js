@@ -20,6 +20,7 @@
   let seen = new Set();
   let toastTimer;
   let banner = null; // aviso de perfil incompleto en Descubrir
+  let stories = null; // fila de estados arriba de Descubrir
   let access = null; // estado de la prueba gratuita y la suscripción
   let accessTimer = null;
   let view = "discover"; // pantalla abierta
@@ -101,7 +102,22 @@
   vStatus.after(vPlans);
 
   const views = { discover: $("v-discover"), matches: $("v-matches"), chat: $("v-chat"), status: vStatus, plans: vPlans };
-  const titles = { discover: "Descubrir", matches: "Coincidencias", status: "Estados", plans: "Planes" };
+  const titles = { discover: "Descubrir", matches: "Chat", status: "Estados", plans: "Planes" };
+
+  const TAB_ICONS = {
+    discover: '<circle cx="12" cy="12" r="9"/><path d="M15 9l-2 6-4 0 2-6z"/>',
+    matches: '<path d="M5 5h14v10H9l-4 4z"/>',
+    status: '<circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="9" stroke-dasharray="3 3"/>',
+    profile: '<circle cx="12" cy="8" r="4"/><path d="M4 20c1-4 4-6 8-6s7 2 8 6"/>'
+  };
+  const setTab = (btn, d, label) => {
+    if (!btn) return;
+    btn.innerHTML = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + d + "</svg><span>" + label + "</span>";
+  };
+  setTab(community.querySelector('.c-tabs button[data-tab="discover"]'), TAB_ICONS.discover, "Descubrir");
+  setTab(community.querySelector('.c-tabs button[data-tab="matches"]'), TAB_ICONS.matches, "Chat");
+  setTab(statusTab, TAB_ICONS.status, "Estados");
+  setTab($("c-profile"), TAB_ICONS.profile, "Perfil");
 
   function leaveChat() {
     if (channel) { sb.removeChannel(channel); channel = null; }
@@ -177,7 +193,29 @@
       });
     }
     banner = await profileBanner();
+    stories = await storiesBar();
     renderCard();
+  }
+
+  // Fila de estados (como historias) arriba de Descubrir
+  async function storiesBar() {
+    const row = el("div", "c-stories");
+    const mine = el("button", "c-story");
+    mine.type = "button";
+    mine.append(el("div", "c-av c-plus", "+"), el("span", "", "Tu estado"));
+    mine.onclick = () => showTab("status");
+    row.append(mine);
+    try {
+      const { data } = await sb.rpc("get_active_statuses").select("user_id,full_name,avatar_path").limit(20);
+      (data || []).filter((s) => s.user_id !== me.id).forEach((s) => {
+        const b = el("button", "c-story");
+        b.type = "button";
+        b.append(avatar(s.avatar_path, s.full_name), el("span", "", (s.full_name || "").split(" ")[0]));
+        b.onclick = () => showTab("status");
+        row.append(b);
+      });
+    } catch (e) { console.error(e); }
+    return row;
   }
 
   // Avisa si al perfil le falta algo y explica por qué no aparece en Descubrir
@@ -199,6 +237,8 @@
     return box;
   }
 
+  const top = () => [...(banner ? [banner] : []), ...(stories ? [stories] : [])];
+
   function renderCard() {
     const box = views.discover;
     const p = deck[0];
@@ -209,22 +249,30 @@
       again.type = "button";
       again.onclick = loadDiscover;
       empty.append(again);
-      box.replaceChildren(...(banner ? [banner] : []), empty);
+      box.replaceChildren(...top(), empty);
       return;
     }
-    const card = el("article", "c-card");
-    card.append(avatar(p.avatar_path, p.full_name, "big"));
-    if (p.is_verified) card.append(el("span", "c-badge", "Identidad verificada"));
-    card.append(el("h2", "", (p.full_name || "Sin nombre") + ", " + p.age));
-    if (p.country) card.append(el("p", "c-muted", p.country));
-    if (p.description) card.append(el("p", "c-bio", p.description));
+    const card = el("article", "c-card full");
+    if (p.avatar_path) {
+      const ph = document.createElement("img");
+      ph.className = "c-card-photo";
+      ph.alt = "Foto de " + (p.full_name || "perfil");
+      ph.src = sb.storage.from("avatars").getPublicUrl(p.avatar_path).data.publicUrl;
+      card.append(ph);
+    }
+    if (p.is_verified) card.append(el("span", "c-badge top", "Identidad verificada"));
+    const info = el("div", "c-card-info");
+    info.append(el("h2", "", (p.full_name || "Sin nombre") + ", " + p.age));
+    if (p.country) info.append(el("p", "c-muted", p.country));
+    if (p.description) info.append(el("p", "c-bio", p.description));
     if (p.status || p.statusImage) {
       const st = el("div", "c-status");
       st.append(el("small", "c-muted", "Su estado de hoy"));
       if (p.statusImage) st.append(statusImg(p.statusImage));
       if (p.status) st.append(el("p", "", p.status));
-      card.append(st);
+      info.append(st);
     }
+    card.append(info);
 
     const acts = el("div", "c-acts");
     const pass = el("button", "c-btn ghost", "Pasar");
@@ -237,7 +285,7 @@
     const rep = el("button", "c-link", "Reportar este perfil");
     rep.type = "button";
     rep.onclick = () => reportUser(p.id, p.statusRow);
-    box.replaceChildren(...(banner ? [banner] : []), card, acts, rep);
+    box.replaceChildren(...top(), card, acts, rep);
   }
 
   async function doLike(p, btn) {
@@ -420,31 +468,83 @@
   }
 
   /* ---------- Coincidencias ---------- */
+  const getSeen = (id) => { try { return Number(localStorage.getItem("em_seen_" + id)) || 0; } catch (e) { return 0; } };
+  const markSeen = (id) => { try { localStorage.setItem("em_seen_" + id, String(Date.now())); } catch (e) { /* sin almacenamiento */ } };
+  function shortTime(iso) {
+    const d = new Date(iso), now = new Date();
+    if (d.toDateString() === now.toDateString()) return d.toLocaleTimeString("es-CO", { hour: "2-digit", minute: "2-digit" });
+    if (Math.floor((now - d) / 86400000) < 2) return "Ayer";
+    return d.toLocaleDateString("es-CO", { day: "numeric", month: "short" });
+  }
+
   async function loadMatches() {
     const box = views.matches;
     box.replaceChildren(el("p", "c-empty", "Cargando…"));
-    const { data, error } = await sb.rpc("get_my_matches").select("*").order("created_at", { ascending: false });
+    const { data, error } = await sb.rpc("get_my_matches").select("*");
     if (error) {
       console.error(error);
       box.replaceChildren(el("p", "c-empty", "No se pudieron cargar tus coincidencias."));
       return;
     }
-    if (!data.length) {
+    const all = data || [];
+    if (!all.length) {
       box.replaceChildren(el("p", "c-empty", "Aún no tienes coincidencias. Da “Me gusta” en Descubrir."));
       return;
     }
-    const list = el("div", "c-list");
-    data.forEach((m) => {
-      const row = el("button", "c-row");
-      row.type = "button";
-      row.append(avatar(m.avatar_path, m.full_name));
-      const txt = el("div");
-      txt.append(el("b", "", m.full_name || "Sin nombre"), el("small", "", "Toca para escribir"));
-      row.append(txt);
-      row.onclick = () => openChat(m);
-      list.append(row);
-    });
-    box.replaceChildren(list);
+    const fresh = all.filter((m) => !m.last_at);
+    const talked = all.filter((m) => m.last_at).sort((a, b) => new Date(b.last_at) - new Date(a.last_at));
+
+    const search = document.createElement("input");
+    search.type = "search";
+    search.className = "c-search";
+    search.placeholder = "Buscar coincidencias";
+    search.setAttribute("aria-label", "Buscar coincidencias");
+    const holder = el("div");
+
+    function draw(filter) {
+      const q = (filter || "").trim().toLowerCase();
+      const ok = (m) => !q || (m.full_name || "").toLowerCase().includes(q);
+      const kids = [];
+      const f = fresh.filter(ok);
+      if (f.length) {
+        kids.push(el("h3", "c-sub", "Parejas nuevas"));
+        const row = el("div", "c-newrow");
+        f.forEach((m) => {
+          const b = el("button", "c-new");
+          b.type = "button";
+          b.append(avatar(m.avatar_path, m.full_name), el("span", "", (m.full_name || "Sin nombre").split(" ")[0]));
+          b.onclick = () => openChat(m);
+          row.append(b);
+        });
+        kids.push(row);
+      }
+      const t = talked.filter(ok);
+      if (t.length) {
+        kids.push(el("h3", "c-sub", "Mensajes"));
+        const list = el("div", "c-list");
+        t.forEach((m) => {
+          const row = el("button", "c-row");
+          row.type = "button";
+          row.append(avatar(m.avatar_path, m.full_name));
+          const preview = m.last_has_image ? (m.last_body ? "Foto · " + m.last_body : "Foto") : (m.last_body || "");
+          const txt = el("div");
+          txt.append(el("b", "", m.full_name || "Sin nombre"), el("small", "", (m.last_sender === me.id ? "Tú: " : "") + preview));
+          row.append(txt);
+          const side = el("div", "c-side");
+          side.append(el("time", "", shortTime(m.last_at)));
+          if (m.last_sender !== me.id && new Date(m.last_at).getTime() > getSeen(m.match_id)) side.append(el("span", "c-dot"));
+          row.append(side);
+          row.onclick = () => openChat(m);
+          list.append(row);
+        });
+        kids.push(list);
+      }
+      if (!kids.length) kids.push(el("p", "c-empty", "Sin resultados."));
+      holder.replaceChildren(...kids);
+    }
+    search.addEventListener("input", () => draw(search.value));
+    draw("");
+    box.replaceChildren(search, holder);
   }
 
   /* ---------- Chat ---------- */
@@ -471,6 +571,7 @@
   async function openChat(m) {
     leaveChat();
     current = m;
+    markSeen(m.match_id);
     seen = new Set();
     $("chat-msgs").replaceChildren();
     $("c-more").hidden = false;
