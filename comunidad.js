@@ -19,6 +19,7 @@
   let channel = null;
   let seen = new Set();
   let toastTimer;
+  let banner = null; // aviso de perfil incompleto en Descubrir
 
   function say(msg) {
     toastBox.textContent = msg;
@@ -152,14 +153,40 @@
         p.statusImage = s ? s.image_path : "";
       });
     }
+    banner = await profileBanner();
     renderCard();
+  }
+
+  // Avisa si al perfil le falta algo y explica por qué no aparece en Descubrir
+  async function profileBanner() {
+    const { data: me_ } = await sb.from("profiles").select("full_name,country,description,avatar_path").eq("id", me.id).single();
+    if (!me_) return null;
+    const labels = { full_name: "nombre", country: "país", description: "descripción", avatar_path: "foto" };
+    const missing = Object.keys(labels).filter((k) => !me_[k] || !String(me_[k]).trim());
+    if (!missing.length) return null;
+    const pct = Math.round(((4 - missing.length) / 4) * 100);
+    const box = el("div", "c-banner");
+    let txt = "Tu perfil está al " + pct + " %. Falta: " + missing.map((k) => labels[k]).join(", ") + ".";
+    if (missing.includes("avatar_path") || missing.includes("description")) txt += " Mientras falte la foto o la descripción, no apareces en Descubrir.";
+    box.append(el("p", "", txt));
+    const go = el("button", "c-btn gold", "Completar perfil");
+    go.type = "button";
+    go.onclick = () => { closeCommunity(); $("profile").click(); };
+    box.append(go);
+    return box;
   }
 
   function renderCard() {
     const box = views.discover;
     const p = deck[0];
     if (!p) {
-      box.replaceChildren(el("p", "c-empty", "Por ahora no hay más perfiles. Vuelve pronto."));
+      const empty = el("div", "c-empty");
+      empty.append(el("p", "", "Por ahora no hay más perfiles."), el("p", "c-muted", "Vuelve en un rato o invita a alguien que conozcas."));
+      const again = el("button", "c-btn gold", "Actualizar");
+      again.type = "button";
+      again.onclick = loadDiscover;
+      empty.append(again);
+      box.replaceChildren(...(banner ? [banner] : []), empty);
       return;
     }
     const card = el("article", "c-card");
@@ -187,7 +214,7 @@
     const rep = el("button", "c-link", "Reportar este perfil");
     rep.type = "button";
     rep.onclick = () => reportUser(p.id, p.statusRow);
-    box.replaceChildren(card, acts, rep);
+    box.replaceChildren(...(banner ? [banner] : []), card, acts, rep);
   }
 
   async function doLike(p, btn) {
@@ -206,6 +233,11 @@
   }
 
   /* ---------- Estados (24 horas) ---------- */
+  function expiresIn(iso) {
+    const h = Math.ceil(24 - (Date.now() - new Date(iso).getTime()) / 3600000);
+    return h <= 1 ? "vence en menos de 1 h" : "vence en " + h + " h";
+  }
+
   function statusImg(path) {
     const img = document.createElement("img");
     img.className = "c-st-img";
@@ -246,10 +278,36 @@
     const file = document.createElement("input");
     file.type = "file";
     file.accept = "image/jpeg,image/png,image/webp";
-    file.setAttribute("aria-label", "Añadir una foto al estado (opcional)");
+    file.className = "sr-only";
+    const pick = el("label", "c-btn ghost c-pick");
+    const pickText = document.createTextNode("Añadir foto");
+    pick.append(file, pickText);
+    const prev = document.createElement("img");
+    prev.className = "c-st-img";
+    prev.alt = "Vista previa de la foto";
+    prev.hidden = true;
+    const clear = el("button", "c-link", "Quitar foto");
+    clear.type = "button";
+    clear.hidden = true;
+    file.addEventListener("change", () => {
+      const f = file.files[0];
+      if (prev.src.startsWith("blob:")) URL.revokeObjectURL(prev.src);
+      if (f) {
+        prev.src = URL.createObjectURL(f);
+        prev.hidden = false;
+        clear.hidden = false;
+        pickText.nodeValue = "Cambiar foto";
+      } else {
+        prev.removeAttribute("src");
+        prev.hidden = true;
+        clear.hidden = true;
+        pickText.nodeValue = "Añadir foto";
+      }
+    });
+    clear.addEventListener("click", () => { file.value = ""; file.dispatchEvent(new Event("change")); });
     const pub = el("button", "c-btn gold", mine ? "Reemplazar mi estado" : "Publicar estado");
     pub.type = "submit";
-    compose.append(ta, count, el("small", "c-muted", "Foto (opcional): JPG, PNG o WEBP, máximo 5 MB"), file, pub);
+    compose.append(ta, count, pick, prev, clear, el("small", "c-muted", "Foto opcional: JPG, PNG o WEBP, máximo 5 MB"), pub);
     compose.addEventListener("submit", async (e) => {
       e.preventDefault();
       const body = ta.value.trim();
@@ -284,7 +342,7 @@
     // Tu estado actual
     if (mine) {
       const card = el("div", "c-mine");
-      card.append(el("small", "c-muted", "Tu estado · " + timeAgo(mine.created_at)));
+      card.append(el("small", "c-muted", "Tu estado · " + timeAgo(mine.created_at) + " · " + expiresIn(mine.created_at)));
       if (mine.image_path) card.append(statusImg(mine.image_path));
       if (mine.body) card.append(el("p", "", mine.body));
       const del = el("button", "c-btn ghost", "Eliminar");
