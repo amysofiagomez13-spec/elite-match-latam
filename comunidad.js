@@ -20,6 +20,8 @@
   let seen = new Set();
   let toastTimer;
   let banner = null; // aviso de perfil incompleto en Descubrir
+  let access = null; // estado de la prueba gratuita y la suscripción
+  let accessTimer = null;
 
   function say(msg) {
     toastBox.textContent = msg;
@@ -115,12 +117,14 @@
 
   function closeCommunity() {
     leaveChat();
+    clearInterval(accessTimer);
     community.hidden = true;
     document.body.style.overflow = "";
   }
 
   enter.addEventListener("click", async () => {
     await syncProfile();
+    loadAccess();
     community.hidden = false;
     document.body.style.overflow = "hidden";
     showTab("discover");
@@ -500,6 +504,32 @@
     $("c-menu").hidden = true;
     say("Gracias. Revisaremos tu reporte.");
   });
+
+  /* ---------- Prueba gratuita de 48 horas ---------- */
+  const accessBar = el("div", "c-access");
+  accessBar.hidden = true;
+  community.querySelector(".c-top").after(accessBar);
+
+  function paintAccess() {
+    if (!access || access.subscribed) { accessBar.hidden = true; return; }
+    const left = Math.max(0, Math.floor((new Date(access.trial_ends_at).getTime() - Date.now()) / 1000));
+    accessBar.hidden = false;
+    if (left > 0) {
+      accessBar.className = "c-access";
+      accessBar.textContent = "Prueba gratis: te quedan " + Math.floor(left / 3600) + " h " + Math.floor((left % 3600) / 60) + " min";
+    } else {
+      accessBar.className = "c-access ended";
+      accessBar.textContent = "Tu prueba gratuita terminó. Suscríbete para seguir usando fotos y llamadas.";
+    }
+  }
+
+  async function loadAccess() {
+    const { data, error } = await sb.rpc("get_my_access").maybeSingle();
+    if (error) { console.error(error); access = null; } else access = data;
+    paintAccess();
+    clearInterval(accessTimer);
+    accessTimer = setInterval(paintAccess, 30000);
+  }
 
   /* ---------- Eliminar cuenta ---------- */
   const delBtn = $("delete-account");

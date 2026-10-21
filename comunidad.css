@@ -240,3 +240,8 @@ footer a, .signup-consent a { color: var(--gold-light); }
 .c-banner p { margin: 0 0 10px; }
 .c-banner .c-btn { min-height: 44px; width: 100%; }
 .c-empty .c-btn { margin-top: 14px; min-width: 180px; }
+
+/* Prueba gratuita */
+.c-access { padding: 8px 16px; text-align: center; font-size: 13px; color: var(--gold-light); background: rgba(216, 173, 85, .1); border-bottom: 1px solid var(--line); }
+.c-access.ended { color: #ffb3b3; background: rgba(255, 120, 120, .08); }
+.c-access[hidden] { display: none; }
