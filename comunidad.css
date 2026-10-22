@@ -299,3 +299,11 @@ footer a, .signup-consent a { color: var(--gold-light); }
 .c-cform input { flex: 1; min-width: 0; height: 44px; padding: 0 14px; border: 1px solid var(--line); border-radius: 999px; background: #0b0c0f; color: var(--text); font-size: 15px; }
 .c-cform .c-btn { flex: none; min-width: 96px; min-height: 44px; }
 .c-clock { margin-top: 8px; }
+
+/* Muro */
+.c-post { margin-top: 14px; padding: 12px; border: 1px solid var(--line); border-radius: 16px; background: rgba(0, 0, 0, .2); }
+.c-phead { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+.c-phead b { display: block; }
+.c-pbody { margin: 6px 0; line-height: 1.5; overflow-wrap: anywhere; white-space: pre-wrap; }
+.c-pacts { display: flex; gap: 14px; margin-top: 2px; }
+.c-pacts .c-link { align-self: auto; padding: 0; min-height: 36px; }

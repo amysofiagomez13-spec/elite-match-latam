@@ -100,13 +100,22 @@
   vPlans.id = "v-plans";
   vPlans.hidden = true;
   vStatus.after(vPlans);
+  const vWall = el("div", "c-view");
+  vWall.id = "v-wall";
+  vWall.hidden = true;
+  vStatus.after(vWall);
+  const wallTab = el("button", "", "Muro");
+  wallTab.type = "button";
+  wallTab.dataset.tab = "wall";
+  community.querySelector('.c-tabs button[data-tab="discover"]').after(wallTab);
 
-  const views = { discover: $("v-discover"), matches: $("v-matches"), chat: $("v-chat"), status: vStatus, plans: vPlans };
-  const titles = { discover: "Descubrir", matches: "Chat", status: "Estados", plans: "Planes" };
+  const views = { discover: $("v-discover"), matches: $("v-matches"), chat: $("v-chat"), status: vStatus, plans: vPlans, wall: vWall };
+  const titles = { discover: "Descubrir", matches: "Chat", status: "Estados", plans: "Planes", wall: "Muro" };
 
   const TAB_ICONS = {
     discover: '<circle cx="12" cy="12" r="9"/><path d="M15 9l-2 6-4 0 2-6z"/>',
     matches: '<path d="M5 5h14v10H9l-4 4z"/>',
+    wall: '<rect x="4" y="5" width="16" height="14" rx="2"/><path d="M8 10h8M8 14h5"/>',
     status: '<circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="9" stroke-dasharray="3 3"/>',
     profile: '<circle cx="12" cy="8" r="4"/><path d="M4 20c1-4 4-6 8-6s7 2 8 6"/>'
   };
@@ -117,6 +126,7 @@
   setTab(community.querySelector('.c-tabs button[data-tab="discover"]'), TAB_ICONS.discover, "Descubrir");
   setTab(community.querySelector('.c-tabs button[data-tab="matches"]'), TAB_ICONS.matches, "Chat");
   setTab(statusTab, TAB_ICONS.status, "Estados");
+  setTab(wallTab, TAB_ICONS.wall, "Muro");
   setTab($("c-profile"), TAB_ICONS.profile, "Perfil");
 
   function leaveChat() {
@@ -143,6 +153,7 @@
     if (name === "matches") loadMatches();
     if (name === "status") loadStatuses();
     if (name === "plans") loadPlans();
+    if (name === "wall") loadWall();
   }
 
   function closeCommunity() {
@@ -477,17 +488,21 @@
     if (m.includes("comentar_requiere_suscripcion")) return "Comentar requiere suscripción.";
     if (m.includes("limite_comentarios")) return "Llegaste al límite de comentarios de hoy.";
     if (m.includes("estado_no_disponible")) return "Este estado ya no está disponible.";
+    if (m.includes("publicacion_no_disponible")) return "Esta publicación ya no está disponible.";
     return "No se pudo comentar.";
   };
 
-  function commentsPanel(status, onCount) {
+  function commentsPanel(status, onCount, kind) {
+    const K = kind === "post"
+      ? { list: "get_post_comments", arg: "p_post", table: "post_comments", key: "post_id", del: "delete_post_comment" }
+      : { list: "get_status_comments", arg: "p_status", table: "status_comments", key: "status_id", del: "delete_status_comment" };
     const box = el("div", "c-comments");
     const list = el("div", "c-clist");
     box.append(list);
 
     async function load() {
       list.replaceChildren(el("p", "c-muted", "Cargando comentarios…"));
-      const { data, error } = await sb.rpc("get_status_comments", { p_status: status.id });
+      const { data, error } = await sb.rpc(K.list, { [K.arg]: status.id });
       if (error) { console.error(error); list.replaceChildren(el("p", "c-muted", "No se pudieron cargar los comentarios.")); return; }
       const rows = data || [];
       onCount(rows.length);
@@ -507,7 +522,7 @@
           const del = el("button", "c-link", "Borrar");
           del.type = "button";
           del.onclick = async () => {
-            const { error: err } = await sb.rpc("delete_status_comment", { p_comment: c.id });
+            const { error: err } = await sb.rpc(K.del, { p_comment: c.id });
             if (err) { console.error(err); say("No se pudo borrar el comentario."); return; }
             load();
           };
@@ -534,7 +549,7 @@
         const body = input.value.trim();
         if (!body) return;
         send.disabled = true;
-        const { error } = await sb.from("status_comments").insert({ status_id: status.id, body });
+        const { error } = await sb.from(K.table).insert({ [K.key]: status.id, body });
         send.disabled = false;
         if (error) { console.error(error); say(commentError(error)); return; }
         input.value = "";
@@ -554,18 +569,141 @@
     return box;
   }
 
-  function commentsToggle(status) {
+  function commentsToggle(status, kind) {
     const wrap = el("div", "c-cwrap");
     const btn = el("button", "c-link", "Comentarios (" + (status.comment_count || 0) + ")");
     btn.type = "button";
     let panel = null;
     btn.addEventListener("click", () => {
       if (panel) { panel.remove(); panel = null; return; }
-      panel = commentsPanel(status, (n) => (btn.textContent = "Comentarios (" + n + ")"));
+      panel = commentsPanel(status, (n) => (btn.textContent = "Comentarios (" + n + ")"), kind);
       wrap.append(panel);
     });
     wrap.append(btn);
     return wrap;
+  }
+
+  /* ---------- Muro de publicaciones ---------- */
+  const wallTime = (iso) => {
+    const h = Math.floor((Date.now() - new Date(iso).getTime()) / 3600000);
+    if (h < 1) return "hace un momento";
+    if (h < 24) return "hace " + h + " h";
+    const d = Math.floor(h / 24);
+    return d === 1 ? "ayer" : "hace " + d + " días";
+  };
+  const postError = (e) => isBlocked(e) ? BLOCK_MSG
+    : String((e && e.message) || "").includes("limite_publicaciones") ? "Llegaste al límite de publicaciones de hoy."
+    : "No se pudo publicar.";
+
+  function wallComposer() {
+    const form = el("form", "c-compose");
+    const ta = document.createElement("textarea");
+    ta.maxLength = 500;
+    ta.rows = 3;
+    ta.placeholder = "¿Qué quieres compartir con la comunidad?";
+    ta.setAttribute("aria-label", "Nueva publicación");
+    const count = el("small", "c-muted", "0/500");
+    ta.addEventListener("input", () => (count.textContent = ta.value.length + "/500"));
+
+    const file = document.createElement("input");
+    file.type = "file";
+    file.accept = "image/jpeg,image/png,image/webp";
+    file.className = "sr-only";
+    const pick = el("label", "c-btn ghost c-pick");
+    const pickText = document.createTextNode("Añadir foto");
+    pick.append(file, pickText);
+    const prev = document.createElement("img");
+    prev.className = "c-st-img";
+    prev.alt = "Vista previa de la foto";
+    prev.hidden = true;
+    const clear = el("button", "c-link", "Quitar foto");
+    clear.type = "button";
+    clear.hidden = true;
+    file.addEventListener("change", () => {
+      const f = file.files[0];
+      if (prev.src.startsWith("blob:")) URL.revokeObjectURL(prev.src);
+      if (f) { prev.src = URL.createObjectURL(f); prev.hidden = false; clear.hidden = false; pickText.nodeValue = "Cambiar foto"; }
+      else { prev.removeAttribute("src"); prev.hidden = true; clear.hidden = true; pickText.nodeValue = "Añadir foto"; }
+    });
+    clear.addEventListener("click", () => { file.value = ""; file.dispatchEvent(new Event("change")); });
+
+    const pub = el("button", "c-btn gold", "Publicar en el muro");
+    pub.type = "submit";
+    form.append(ta, count, pick, prev, clear, el("small", "c-muted", "Foto opcional: JPG, PNG o WEBP, máximo 5 MB"), pub);
+
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const body = ta.value.trim();
+      const f = file.files[0];
+      if (!body && !f) { say("Escribe algo o elige una foto."); return; }
+      if (f && !["image/jpeg", "image/png", "image/webp"].includes(f.type)) { say("Usa una imagen JPG, PNG o WEBP."); return; }
+      if (f && f.size > 5 * 1024 * 1024) { say("La foto no puede superar los 5 MB."); return; }
+      pub.disabled = true;
+      let image_path = null;
+      if (f) {
+        const ext = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp" }[f.type];
+        image_path = me.id + "/post-" + Date.now() + "." + ext;
+        const up = await sb.storage.from("avatars").upload(image_path, f, { contentType: f.type, upsert: false });
+        if (up.error) { console.error(up.error); say("No se pudo subir la foto."); pub.disabled = false; return; }
+      }
+      const { error } = await sb.from("posts").insert({ body, image_path });
+      if (error) {
+        console.error(error);
+        if (image_path) await sb.storage.from("avatars").remove([image_path]);
+        say(postError(error));
+        pub.disabled = false;
+        return;
+      }
+      say("Publicado en el muro.");
+      loadWall();
+    });
+    return form;
+  }
+
+  function wallPost(p) {
+    const card = el("article", "c-post");
+    const head = el("div", "c-phead");
+    const who = el("div");
+    who.append(el("b", "", p.full_name || "Sin nombre"), el("small", "c-muted", wallTime(p.created_at)));
+    head.append(avatar(p.avatar_path, p.full_name), who);
+    card.append(head);
+    if (p.body) card.append(el("p", "c-pbody", p.body));
+    if (p.image_path) card.append(statusImg(p.image_path));
+
+    const acts = el("div", "c-pacts");
+    if (p.user_id !== me.id) {
+      const rep = el("button", "c-link", "Reportar");
+      rep.type = "button";
+      rep.onclick = () => reportUser(p.user_id, null, "Publicación: " + (p.body || "") + (p.image_path ? " | foto: " + p.image_path : ""));
+      acts.append(rep);
+    } else {
+      const del = el("button", "c-link", "Borrar publicación");
+      del.type = "button";
+      del.onclick = async () => {
+        if (!confirm("¿Borrar esta publicación y sus comentarios?")) return;
+        const { data: path, error } = await sb.rpc("delete_post", { p_post: p.id });
+        if (error) { console.error(error); say("No se pudo borrar la publicación."); return; }
+        if (path) { try { await sb.storage.from("avatars").remove([path]); } catch (e) { console.error(e); } }
+        say("Publicación borrada.");
+        loadWall();
+      };
+      acts.append(del);
+    }
+    card.append(acts, commentsToggle(p, "post"));
+    return card;
+  }
+
+  async function loadWall() {
+    const box = views.wall;
+    box.replaceChildren(el("p", "c-empty", "Cargando…"));
+    if (!access) await loadAccess();
+    const { data, error } = await sb.rpc("get_wall");
+    if (error) { console.error(error); box.replaceChildren(el("p", "c-empty", "No se pudo cargar el muro.")); return; }
+    const parts = [wallComposer()];
+    const posts = data || [];
+    if (!posts.length) parts.push(el("p", "c-empty", "Aún no hay publicaciones. Sé la primera persona en publicar."));
+    posts.forEach((p) => parts.push(wallPost(p)));
+    box.replaceChildren(...parts);
   }
 
   /* ---------- Coincidencias ---------- */
