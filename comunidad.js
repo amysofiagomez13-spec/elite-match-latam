@@ -339,6 +339,7 @@
   async function loadStatuses() {
     const box = views.status;
     box.replaceChildren(el("p", "c-empty", "Cargando…"));
+    if (!access) await loadAccess();
     const { data, error } = await sb.rpc("get_active_statuses").select("*").order("created_at", { ascending: false }).limit(50);
     if (error) {
       console.error(error);
@@ -427,6 +428,7 @@
       card.append(el("small", "c-muted", "Tu estado · " + timeAgo(mine.created_at) + " · " + expiresIn(mine.created_at)));
       if (mine.image_path) card.append(statusImg(mine.image_path));
       if (mine.body) card.append(el("p", "", mine.body));
+      card.append(commentsToggle(mine));
       const del = el("button", "c-btn ghost", "Eliminar");
       del.type = "button";
       del.addEventListener("click", async () => {
@@ -459,12 +461,111 @@
         rep.type = "button";
         rep.onclick = () => reportUser(s.user_id, s);
         t.append(rep);
+        t.append(commentsToggle(s));
         row.append(t);
         list.append(row);
       });
       parts.push(list);
     }
     box.replaceChildren(...parts);
+  }
+
+  /* ---------- Comentarios del muro (solo con suscripción o en la prueba) ---------- */
+  const commentError = (e) => {
+    const m = String((e && e.message) || "");
+    if (isBlocked(e)) return BLOCK_MSG;
+    if (m.includes("comentar_requiere_suscripcion")) return "Comentar requiere suscripción.";
+    if (m.includes("limite_comentarios")) return "Llegaste al límite de comentarios de hoy.";
+    if (m.includes("estado_no_disponible")) return "Este estado ya no está disponible.";
+    return "No se pudo comentar.";
+  };
+
+  function commentsPanel(status, onCount) {
+    const box = el("div", "c-comments");
+    const list = el("div", "c-clist");
+    box.append(list);
+
+    async function load() {
+      list.replaceChildren(el("p", "c-muted", "Cargando comentarios…"));
+      const { data, error } = await sb.rpc("get_status_comments", { p_status: status.id });
+      if (error) { console.error(error); list.replaceChildren(el("p", "c-muted", "No se pudieron cargar los comentarios.")); return; }
+      const rows = data || [];
+      onCount(rows.length);
+      if (!rows.length) { list.replaceChildren(el("p", "c-muted", "Aún no hay comentarios.")); return; }
+      list.replaceChildren(...rows.map((c) => {
+        const row = el("div", "c-comment");
+        row.append(el("b", "", c.full_name || "Sin nombre"), el("p", "", c.body));
+        const acts = el("div", "c-cacts");
+        row.append(el("small", "c-muted", timeAgo(c.created_at)));
+        if (c.user_id !== me.id) {
+          const rep = el("button", "c-link", "Reportar");
+          rep.type = "button";
+          rep.onclick = () => reportUser(c.user_id, null, "Comentario: " + c.body);
+          acts.append(rep);
+        }
+        if (c.user_id === me.id || status.user_id === me.id) {
+          const del = el("button", "c-link", "Borrar");
+          del.type = "button";
+          del.onclick = async () => {
+            const { error: err } = await sb.rpc("delete_status_comment", { p_comment: c.id });
+            if (err) { console.error(err); say("No se pudo borrar el comentario."); return; }
+            load();
+          };
+          acts.append(del);
+        }
+        row.append(acts);
+        return row;
+      }));
+    }
+
+    if (access && (access.subscribed || access.in_trial)) {
+      const form = el("form", "c-cform");
+      const input = document.createElement("input");
+      input.type = "text";
+      input.maxLength = 300;
+      input.placeholder = "Escribe un comentario";
+      input.setAttribute("aria-label", "Escribe un comentario");
+      input.autocomplete = "off";
+      const send = el("button", "c-btn gold", "Comentar");
+      send.type = "submit";
+      form.append(input, send);
+      form.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const body = input.value.trim();
+        if (!body) return;
+        send.disabled = true;
+        const { error } = await sb.from("status_comments").insert({ status_id: status.id, body });
+        send.disabled = false;
+        if (error) { console.error(error); say(commentError(error)); return; }
+        input.value = "";
+        load();
+      });
+      box.append(form);
+    } else {
+      const lock = el("div", "c-clock");
+      lock.append(el("small", "c-muted", "Solo las personas con suscripción pueden comentar."));
+      const plans = el("button", "c-link", "Suscríbete para comentar");
+      plans.type = "button";
+      plans.onclick = () => showTab("plans");
+      lock.append(plans);
+      box.append(lock);
+    }
+    load();
+    return box;
+  }
+
+  function commentsToggle(status) {
+    const wrap = el("div", "c-cwrap");
+    const btn = el("button", "c-link", "Comentarios (" + (status.comment_count || 0) + ")");
+    btn.type = "button";
+    let panel = null;
+    btn.addEventListener("click", () => {
+      if (panel) { panel.remove(); panel = null; return; }
+      panel = commentsPanel(status, (n) => (btn.textContent = "Comentarios (" + n + ")"));
+      wrap.append(panel);
+    });
+    wrap.append(btn);
+    return wrap;
   }
 
   /* ---------- Coincidencias ---------- */
@@ -615,7 +716,7 @@
   });
 
   /* ---------- Bloquear y reportar ---------- */
-  async function reportUser(userId, statusRow) {
+  async function reportUser(userId, statusRow, extra) {
     const reason = (prompt("Cuéntanos qué pasó (mínimo 3 caracteres):") || "").trim();
     if (reason.length < 3) return;
     const row = { reporter: me.id, reported: userId, reason };
@@ -623,6 +724,7 @@
       row.status_id = statusRow.id;
       row.status_snapshot = ((statusRow.body || "") + (statusRow.image_path ? " | foto: " + statusRow.image_path : "")).slice(0, 1500);
     }
+    if (extra) row.status_snapshot = String(extra).slice(0, 1500);
     const { error } = await sb.from("reports").insert(row);
     if (error) { console.error(error); say("No se pudo enviar el reporte."); return; }
     say("Gracias. Revisaremos tu reporte.");
