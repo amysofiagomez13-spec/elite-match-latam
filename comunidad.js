@@ -33,6 +33,9 @@
 
   const BLOCK_MSG = "No se permite compartir teléfonos, redes sociales, correos o enlaces, ni pedir dinero.";
   const isBlocked = (e) => !!e && String(e.message || "").includes("contenido_no_permitido");
+  const SVG_OPEN = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">';
+  const ICON_CAM = SVG_OPEN + '<path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>';
+  const ICON_SEND = SVG_OPEN + '<path d="M4 12l16-8-6 16-3-7z"/></svg>';
 
   function avatar(path, name, extra) {
     const box = el("div", "c-av " + (extra || ""));
@@ -316,6 +319,74 @@
   }
 
   /* ---------- Estados (24 horas) ---------- */
+  // Barra de escritura fija abajo: foto, texto y enviar en una misma línea
+  function dockedComposer(opts) {
+    const wrap = el("div", "c-dockwrap");
+    const form = el("form", "c-dock");
+    const top = el("div", "c-dock-top");
+    const count = el("small", "c-dock-count", "");
+    top.append(el("small", "c-dock-hint", opts.hint || ""), count);
+
+    const prevRow = el("div", "c-dock-prev");
+    prevRow.hidden = true;
+    const prev = document.createElement("img");
+    prev.alt = "Vista previa de la foto";
+    const clear = el("button", "c-link", "Quitar foto");
+    clear.type = "button";
+    prevRow.append(prev, clear);
+
+    const row = el("div", "c-dock-row");
+    const file = document.createElement("input");
+    file.type = "file";
+    file.accept = "image/jpeg,image/png,image/webp";
+    file.className = "sr-only";
+    const photo = el("label", "c-ibtn");
+    photo.setAttribute("aria-label", "Añadir foto");
+    photo.innerHTML = ICON_CAM;
+    photo.append(file);
+    const ta = document.createElement("textarea");
+    ta.rows = 1;
+    ta.maxLength = opts.max;
+    ta.placeholder = opts.placeholder;
+    ta.setAttribute("aria-label", opts.label);
+    const send = el("button", "c-ibtn gold");
+    send.type = "submit";
+    send.setAttribute("aria-label", opts.sendLabel);
+    send.innerHTML = ICON_SEND;
+    row.append(photo, ta, send);
+    form.append(top, prevRow, row);
+    wrap.append(form);
+
+    ta.addEventListener("input", () => {
+      ta.style.height = "auto";
+      ta.style.height = Math.min(ta.scrollHeight, 120) + "px";
+      count.textContent = ta.value.length ? ta.value.length + "/" + opts.max : "";
+    });
+    file.addEventListener("change", () => {
+      if (prev.src && prev.src.startsWith("blob:")) URL.revokeObjectURL(prev.src);
+      const f = file.files[0];
+      if (f) { prev.src = URL.createObjectURL(f); prevRow.hidden = false; }
+      else { prev.removeAttribute("src"); prevRow.hidden = true; }
+    });
+    clear.addEventListener("click", () => { file.value = ""; file.dispatchEvent(new Event("change")); });
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const body = ta.value.trim();
+      const f = file.files[0];
+      if (!body && !f) { say("Escribe algo o elige una foto."); return; }
+      if (f && !["image/jpeg", "image/png", "image/webp"].includes(f.type)) { say("Usa una imagen JPG, PNG o WEBP."); return; }
+      if (f && f.size > 5 * 1024 * 1024) { say("La foto no puede superar los 5 MB."); return; }
+      send.disabled = true;
+      const ok = await opts.onSend(body, f);
+      send.disabled = false;
+      if (ok) {
+        ta.value = ""; ta.style.height = "auto"; count.textContent = "";
+        file.value = ""; file.dispatchEvent(new Event("change"));
+      }
+    });
+    return wrap;
+  }
+
   // Borra las publicaciones del muro vencidas (48 h) de la propia persona, con sus fotos
   async function cleanupExpiredPosts() {
     try {
@@ -370,78 +441,37 @@
     const mine = data.find((s) => s.user_id === me.id);
     const others = data.filter((s) => s.user_id !== me.id);
 
-    // Publicar
-    const compose = el("form", "c-compose");
-    const ta = document.createElement("textarea");
-    ta.maxLength = 140;
-    ta.rows = 3;
-    ta.placeholder = "¿Qué quieres contar hoy?";
-    ta.setAttribute("aria-label", "Tu estado");
-    const count = el("small", "c-muted", "0/140");
-    ta.addEventListener("input", () => (count.textContent = ta.value.length + "/140"));
-    const file = document.createElement("input");
-    file.type = "file";
-    file.accept = "image/jpeg,image/png,image/webp";
-    file.className = "sr-only";
-    const pick = el("label", "c-btn ghost c-pick");
-    const pickText = document.createTextNode("Añadir foto");
-    pick.append(file, pickText);
-    const prev = document.createElement("img");
-    prev.className = "c-st-img";
-    prev.alt = "Vista previa de la foto";
-    prev.hidden = true;
-    const clear = el("button", "c-link", "Quitar foto");
-    clear.type = "button";
-    clear.hidden = true;
-    file.addEventListener("change", () => {
-      const f = file.files[0];
-      if (prev.src.startsWith("blob:")) URL.revokeObjectURL(prev.src);
-      if (f) {
-        prev.src = URL.createObjectURL(f);
-        prev.hidden = false;
-        clear.hidden = false;
-        pickText.nodeValue = "Cambiar foto";
-      } else {
-        prev.removeAttribute("src");
-        prev.hidden = true;
-        clear.hidden = true;
-        pickText.nodeValue = "Añadir foto";
-      }
-    });
-    clear.addEventListener("click", () => { file.value = ""; file.dispatchEvent(new Event("change")); });
-    const pub = el("button", "c-btn gold", mine ? "Reemplazar mi estado" : "Publicar estado");
-    pub.type = "submit";
-    compose.append(ta, count, pick, prev, clear, el("small", "c-muted", "Foto opcional: JPG, PNG o WEBP, máximo 5 MB"), pub);
-    compose.addEventListener("submit", async (e) => {
-      e.preventDefault();
-      const body = ta.value.trim();
-      const f = file.files[0];
-      if (!body && !f) { say("Escribe algo o elige una foto."); return; }
-      if (f && !["image/jpeg", "image/png", "image/webp"].includes(f.type)) { say("Usa una imagen JPG, PNG o WEBP."); return; }
-      if (f && f.size > 5 * 1024 * 1024) { say("La foto no puede superar los 5 MB."); return; }
-      pub.disabled = true;
-      let image_path = null;
-      if (f) {
-        const ext = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp" }[f.type];
-        image_path = me.id + "/status-" + Date.now() + "." + ext;
-        const { error: upErr } = await sb.storage.from("avatars").upload(image_path, f, { contentType: f.type, upsert: false });
-        if (upErr) { console.error(upErr); say("No se pudo subir la foto."); pub.disabled = false; return; }
-      }
-      const { data: created, error: err } = await sb.from("statuses").insert({ body, image_path }).select("id").single();
-      if (err) {
-        console.error(err);
-        if (image_path) await sb.storage.from("avatars").remove([image_path]);
-        say(isBlocked(err) ? BLOCK_MSG : "No se pudo publicar tu estado.");
-        pub.disabled = false;
-        return;
-      }
-      if (mine && mine.image_path) await sb.storage.from("avatars").remove([mine.image_path]);
-      await sb.from("statuses").delete().eq("user_id", me.id).neq("id", created.id); // un solo estado activo
-      say("Estado publicado por 24 horas.");
-      loadStatuses();
+    // Barra de escritura fija abajo
+    const composer = dockedComposer({
+      placeholder: "¿Qué quieres contar hoy? (dura 24 h)",
+      max: 140,
+      label: "Tu estado",
+      sendLabel: mine ? "Reemplazar mi estado" : "Publicar estado",
+      hint: mine ? "Un estado nuevo reemplaza el actual." : "",
+      onSend: async (body, f) => {
+        let image_path = null;
+        if (f) {
+          const ext = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp" }[f.type];
+          image_path = me.id + "/status-" + Date.now() + "." + ext;
+          const up = await sb.storage.from("avatars").upload(image_path, f, { contentType: f.type, upsert: false });
+          if (up.error) { console.error(up.error); say("No se pudo subir la foto."); return false; }
+        }
+        const { data: created, error: err } = await sb.from("statuses").insert({ body, image_path }).select("id").single();
+        if (err) {
+          console.error(err);
+          if (image_path) await sb.storage.from("avatars").remove([image_path]);
+          say(isBlocked(err) ? BLOCK_MSG : "No se pudo publicar tu estado.");
+          return false;
+        }
+        if (mine && mine.image_path) await sb.storage.from("avatars").remove([mine.image_path]);
+        await sb.from("statuses").delete().eq("user_id", me.id).neq("id", created.id); // un solo estado activo
+        say("Estado publicado por 24 horas.");
+        loadStatuses();
+        return true;
+      },
     });
 
-    const parts = [compose];
+    const parts = [];
 
     // Tu estado actual
     if (mine) {
@@ -488,6 +518,7 @@
       });
       parts.push(list);
     }
+    parts.push(composer);
     box.replaceChildren(...parts);
   }
 
@@ -610,68 +641,32 @@
     : "No se pudo publicar.";
 
   function wallComposer() {
-    const form = el("form", "c-compose");
-    const ta = document.createElement("textarea");
-    ta.maxLength = 500;
-    ta.rows = 3;
-    ta.placeholder = "¿Qué quieres compartir con la comunidad?";
-    ta.setAttribute("aria-label", "Nueva publicación");
-    const count = el("small", "c-muted", "0/500");
-    ta.addEventListener("input", () => (count.textContent = ta.value.length + "/500"));
-
-    const file = document.createElement("input");
-    file.type = "file";
-    file.accept = "image/jpeg,image/png,image/webp";
-    file.className = "sr-only";
-    const pick = el("label", "c-btn ghost c-pick");
-    const pickText = document.createTextNode("Añadir foto");
-    pick.append(file, pickText);
-    const prev = document.createElement("img");
-    prev.className = "c-st-img";
-    prev.alt = "Vista previa de la foto";
-    prev.hidden = true;
-    const clear = el("button", "c-link", "Quitar foto");
-    clear.type = "button";
-    clear.hidden = true;
-    file.addEventListener("change", () => {
-      const f = file.files[0];
-      if (prev.src.startsWith("blob:")) URL.revokeObjectURL(prev.src);
-      if (f) { prev.src = URL.createObjectURL(f); prev.hidden = false; clear.hidden = false; pickText.nodeValue = "Cambiar foto"; }
-      else { prev.removeAttribute("src"); prev.hidden = true; clear.hidden = true; pickText.nodeValue = "Añadir foto"; }
+    return dockedComposer({
+      placeholder: "Comparte algo con la comunidad (desaparece en 48 h)",
+      max: 500,
+      label: "Nueva publicación",
+      sendLabel: "Publicar en el muro",
+      hint: "",
+      onSend: async (body, f) => {
+        let image_path = null;
+        if (f) {
+          const ext = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp" }[f.type];
+          image_path = me.id + "/post-" + Date.now() + "." + ext;
+          const up = await sb.storage.from("avatars").upload(image_path, f, { contentType: f.type, upsert: false });
+          if (up.error) { console.error(up.error); say("No se pudo subir la foto."); return false; }
+        }
+        const { error } = await sb.from("posts").insert({ body, image_path });
+        if (error) {
+          console.error(error);
+          if (image_path) await sb.storage.from("avatars").remove([image_path]);
+          say(postError(error));
+          return false;
+        }
+        say("Publicado en el muro.");
+        loadWall();
+        return true;
+      },
     });
-    clear.addEventListener("click", () => { file.value = ""; file.dispatchEvent(new Event("change")); });
-
-    const pub = el("button", "c-btn gold", "Publicar en el muro");
-    pub.type = "submit";
-    form.append(ta, count, pick, prev, clear, el("small", "c-muted", "Foto opcional: JPG, PNG o WEBP, máximo 5 MB. Las publicaciones desaparecen a las 48 horas."), pub);
-
-    form.addEventListener("submit", async (e) => {
-      e.preventDefault();
-      const body = ta.value.trim();
-      const f = file.files[0];
-      if (!body && !f) { say("Escribe algo o elige una foto."); return; }
-      if (f && !["image/jpeg", "image/png", "image/webp"].includes(f.type)) { say("Usa una imagen JPG, PNG o WEBP."); return; }
-      if (f && f.size > 5 * 1024 * 1024) { say("La foto no puede superar los 5 MB."); return; }
-      pub.disabled = true;
-      let image_path = null;
-      if (f) {
-        const ext = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp" }[f.type];
-        image_path = me.id + "/post-" + Date.now() + "." + ext;
-        const up = await sb.storage.from("avatars").upload(image_path, f, { contentType: f.type, upsert: false });
-        if (up.error) { console.error(up.error); say("No se pudo subir la foto."); pub.disabled = false; return; }
-      }
-      const { error } = await sb.from("posts").insert({ body, image_path });
-      if (error) {
-        console.error(error);
-        if (image_path) await sb.storage.from("avatars").remove([image_path]);
-        say(postError(error));
-        pub.disabled = false;
-        return;
-      }
-      say("Publicado en el muro.");
-      loadWall();
-    });
-    return form;
   }
 
   function wallPost(p) {
@@ -713,10 +708,11 @@
     if (!access) await loadAccess();
     const { data, error } = await sb.rpc("get_wall");
     if (error) { console.error(error); box.replaceChildren(el("p", "c-empty", "No se pudo cargar el muro.")); return; }
-    const parts = [wallComposer()];
+    const parts = [];
     const posts = data || [];
     if (!posts.length) parts.push(el("p", "c-empty", "Aún no hay publicaciones. Sé la primera persona en publicar."));
     posts.forEach((p) => parts.push(wallPost(p)));
+    parts.push(wallComposer());
     box.replaceChildren(...parts);
   }
 
@@ -947,11 +943,21 @@
   photoInput.type = "file";
   photoInput.accept = "image/jpeg,image/png,image/webp";
   photoInput.className = "sr-only";
-  const photoBtn = el("button", "c-photo", "Foto");
+  const photoBtn = el("button", "c-ibtn");
   photoBtn.type = "button";
   photoBtn.setAttribute("aria-label", "Enviar una foto");
+  photoBtn.innerHTML = ICON_CAM;
+  const sendBtn = chatForm.querySelector('button[type="submit"]');
+  if (sendBtn) {
+    sendBtn.className = "c-ibtn gold";
+    sendBtn.setAttribute("aria-label", "Enviar mensaje");
+    sendBtn.innerHTML = ICON_SEND;
+  }
   chatForm.prepend(photoBtn);
   chatForm.append(photoInput);
+  const chatDock = el("div", "c-dockwrap");
+  chatForm.replaceWith(chatDock);
+  chatDock.append(chatForm);
 
   const photoError = (e) => {
     const m = String((e && e.message) || "");

@@ -309,3 +309,21 @@ footer a, .signup-consent a { color: var(--gold-light); }
 .c-pbody { margin: 6px 0; line-height: 1.5; overflow-wrap: anywhere; white-space: pre-wrap; }
 .c-pacts { display: flex; gap: 14px; margin-top: 2px; }
 .c-pacts .c-link { align-self: auto; padding: 0; min-height: 36px; }
+
+/* Barra de escritura fija abajo (chat, estados y muro) */
+.c-dockwrap { position: sticky; bottom: 0; z-index: 3; margin: auto -16px -16px; padding: 10px 16px 12px; background: linear-gradient(to top, #0a0709 72%, rgba(10, 7, 9, 0)); }
+.c-dock { display: flex; flex-direction: column; gap: 6px; }
+.c-dock-top { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.c-dock-hint, .c-dock-count { font-size: 12px; color: var(--muted); }
+.c-dock-prev { display: flex; align-items: center; gap: 12px; }
+.c-dock-prev[hidden] { display: none; }
+.c-dock-prev img { width: 64px; height: 64px; object-fit: cover; border-radius: 12px; }
+.c-dock-row, #chat-form { display: flex; align-items: flex-end; gap: 6px; padding: 5px; border: 1px solid var(--line); border-radius: 26px; background: #0b0c0f; margin: 0; }
+.c-dock-row textarea { flex: 1; min-width: 0; max-height: 120px; padding: 11px 6px; border: 0; background: transparent; color: var(--text); font-size: 16px; line-height: 1.35; font-family: inherit; resize: none; outline: none; }
+.c-ibtn { flex: none; display: grid; place-items: center; width: 44px; height: 44px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--gold-light); cursor: pointer; }
+.c-ibtn.gold { background: linear-gradient(135deg, #ffe2a0, #d7a344); color: #171006; }
+.c-ibtn:disabled { opacity: .55; }
+.c-ibtn:focus-within { outline: 2px solid var(--gold-light); outline-offset: 1px; }
+#chat-form { align-items: center; }
+#chat-form #chat-text { flex: 1; min-width: 0; height: 44px; padding: 0 6px; border: 0; border-radius: 0; background: transparent; outline: none; }
+#chat-form .c-ibtn { min-width: 44px; min-height: 44px; }
