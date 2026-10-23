@@ -327,3 +327,8 @@ footer a, .signup-consent a { color: var(--gold-light); }
 #chat-form { align-items: center; }
 #chat-form #chat-text { flex: 1; min-width: 0; height: 44px; padding: 0 6px; border: 0; border-radius: 0; background: transparent; outline: none; }
 #chat-form .c-ibtn { min-width: 44px; min-height: 44px; }
+
+/* Botón del mundo y selector de país */
+.c-world { align-self: flex-start; display: flex; align-items: center; gap: 8px; min-height: 44px; margin-bottom: 10px; padding: 0 16px; border: 1px solid var(--gold); border-radius: 999px; background: rgba(0, 0, 0, .35); color: var(--gold-light); font-size: 14px; cursor: pointer; }
+.c-row[aria-current="true"] b { color: var(--gold-light); }
+.signup-dialog select { display: block; width: 100%; box-sizing: border-box; height: 48px; padding: 0 14px; border: 1px solid var(--line); border-radius: 12px; background: #0b0c0f; color: var(--text); font-size: 16px; }

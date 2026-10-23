@@ -21,6 +21,7 @@
   let toastTimer;
   let banner = null; // aviso de perfil incompleto en Descubrir
   let stories = null; // fila de estados arriba de Descubrir
+  let countryFilter = null; // país elegido en el botón del mundo
   let access = null; // estado de la prueba gratuita y la suscripción
   let accessTimer = null;
   let view = "discover"; // pantalla abierta
@@ -107,13 +108,17 @@
   vWall.id = "v-wall";
   vWall.hidden = true;
   vStatus.after(vWall);
+  const vWorld = el("div", "c-view");
+  vWorld.id = "v-world";
+  vWorld.hidden = true;
+  vStatus.after(vWorld);
   const wallTab = el("button", "", "Muro");
   wallTab.type = "button";
   wallTab.dataset.tab = "wall";
   community.querySelector('.c-tabs button[data-tab="discover"]').after(wallTab);
 
-  const views = { discover: $("v-discover"), matches: $("v-matches"), chat: $("v-chat"), status: vStatus, plans: vPlans, wall: vWall };
-  const titles = { discover: "Descubrir", matches: "Chat", status: "Estados", plans: "Planes", wall: "Muro" };
+  const views = { discover: $("v-discover"), matches: $("v-matches"), chat: $("v-chat"), status: vStatus, plans: vPlans, wall: vWall, world: vWorld };
+  const titles = { discover: "Descubrir", matches: "Chat", status: "Estados", plans: "Planes", wall: "Muro", world: "Explorar el mundo" };
 
   const TAB_ICONS = {
     discover: '<circle cx="12" cy="12" r="9"/><path d="M15 9l-2 6-4 0 2-6z"/>',
@@ -157,6 +162,7 @@
     if (name === "status") loadStatuses();
     if (name === "plans") loadPlans();
     if (name === "wall") loadWall();
+    if (name === "world") loadWorld();
   }
 
   function closeCommunity() {
@@ -178,7 +184,7 @@
 
   $("c-home").addEventListener("click", () => {
     if (current) showTab("matches");
-    else if (view === "plans") showTab("discover");
+    else if (view === "plans" || view === "world") showTab("discover");
     else closeCommunity();
   });
   community.querySelectorAll(".c-tabs button[data-tab]").forEach((b) =>
@@ -190,7 +196,7 @@
   async function loadDiscover() {
     const box = views.discover;
     box.replaceChildren(el("p", "c-empty", "Buscando perfiles…"));
-    const { data, error } = await sb.rpc("get_discover_profiles").limit(30);
+    const { data, error } = await sb.rpc("get_discover_profiles", { p_country: countryFilter }).limit(30);
     if (error) {
       console.error(error);
       box.replaceChildren(el("p", "c-empty", "No se pudieron cargar los perfiles. Inténtalo de nuevo."));
@@ -252,18 +258,32 @@
     return box;
   }
 
-  const top = () => [...(banner ? [banner] : []), ...(stories ? [stories] : [])];
+  const worldBtn = el("button", "c-world");
+  worldBtn.type = "button";
+  worldBtn.addEventListener("click", () => showTab("world"));
+  function paintWorld() {
+    worldBtn.innerHTML = SVG_OPEN + '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"/></svg>';
+    worldBtn.append(el("span", "", countryFilter ? countryFilter : "Todo el mundo"));
+  }
+  paintWorld();
+  const top = () => [...(banner ? [banner] : []), worldBtn, ...(stories ? [stories] : [])];
 
   function renderCard() {
     const box = views.discover;
     const p = deck[0];
     if (!p) {
       const empty = el("div", "c-empty");
-      empty.append(el("p", "", "Por ahora no hay más perfiles."), el("p", "c-muted", "Vuelve en un rato o invita a alguien que conozcas."));
+      empty.append(el("p", "", countryFilter ? "No hay más personas de " + countryFilter + " por ahora." : "Por ahora no hay más perfiles."), el("p", "c-muted", "Vuelve en un rato o invita a alguien que conozcas."));
       const again = el("button", "c-btn gold", "Actualizar");
       again.type = "button";
       again.onclick = loadDiscover;
       empty.append(again);
+      if (countryFilter) {
+        const all = el("button", "c-btn ghost", "Ver todo el mundo");
+        all.type = "button";
+        all.onclick = () => { countryFilter = null; paintWorld(); loadDiscover(); };
+        empty.append(all);
+      }
       box.replaceChildren(...top(), empty);
       return;
     }
@@ -622,6 +642,47 @@
     });
     wrap.append(btn);
     return wrap;
+  }
+
+  /* ---------- Explorar por país ---------- */
+  const norm = (t) => String(t || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+
+  async function loadWorld() {
+    const box = views.world;
+    box.replaceChildren(el("p", "c-empty", "Cargando países…"));
+    const { data, error } = await sb.rpc("get_country_counts");
+    if (error) { console.error(error); box.replaceChildren(el("p", "c-empty", "No se pudo cargar la lista de países.")); return; }
+    const rows = data || [];
+    const total = rows.reduce((n, r) => n + r.people, 0);
+
+    const search = document.createElement("input");
+    search.type = "search";
+    search.className = "c-search";
+    search.placeholder = "Buscar país";
+    search.setAttribute("aria-label", "Buscar país");
+    const list = el("div", "c-list");
+
+    function item(label, count, value) {
+      const b = el("button", "c-row");
+      b.type = "button";
+      const t = el("div");
+      t.append(el("b", "", label), el("small", "", count + (count === 1 ? " persona" : " personas")));
+      b.append(t);
+      if (value === countryFilter) b.setAttribute("aria-current", "true");
+      b.onclick = () => { countryFilter = value; paintWorld(); showTab("discover"); };
+      return b;
+    }
+    function draw(q) {
+      const f = norm(q).trim();
+      const items = [];
+      if (!f) items.push(item("Todo el mundo", total, null));
+      rows.filter((r) => !f || norm(r.country).includes(f)).forEach((r) => items.push(item(r.country, r.people, r.country)));
+      if (!items.length) items.push(el("p", "c-empty", "Sin resultados."));
+      list.replaceChildren(...items);
+    }
+    search.addEventListener("input", () => draw(search.value));
+    draw("");
+    box.replaceChildren(el("p", "c-muted", "Elige un país para ver solo a personas de ahí."), search, list);
   }
 
   /* ---------- Muro de publicaciones ---------- */
