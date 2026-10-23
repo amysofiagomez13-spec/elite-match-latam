@@ -167,6 +167,7 @@
     await syncProfile();
     loadAccess();
     cleanupExpiredStatuses();
+    cleanupExpiredPosts();
     community.hidden = false;
     document.body.style.overflow = "hidden";
     showTab("discover");
@@ -315,6 +316,15 @@
   }
 
   /* ---------- Estados (24 horas) ---------- */
+  // Borra las publicaciones del muro vencidas (48 h) de la propia persona, con sus fotos
+  async function cleanupExpiredPosts() {
+    try {
+      const { data } = await sb.rpc("purge_my_expired_posts");
+      const paths = (data || []).filter(Boolean);
+      if (paths.length) await sb.storage.from("avatars").remove(paths);
+    } catch (e) { console.error(e); }
+  }
+
   // Borra los estados vencidos de la propia persona (y sus fotos) al entrar
   async function cleanupExpiredStatuses() {
     try {
@@ -591,6 +601,10 @@
     const d = Math.floor(h / 24);
     return d === 1 ? "ayer" : "hace " + d + " días";
   };
+  const wallLeft = (iso) => {
+    const h = Math.ceil(48 - (Date.now() - new Date(iso).getTime()) / 3600000);
+    return h <= 1 ? "desaparece en menos de 1 h" : "desaparece en " + h + " h";
+  };
   const postError = (e) => isBlocked(e) ? BLOCK_MSG
     : String((e && e.message) || "").includes("limite_publicaciones") ? "Llegaste al límite de publicaciones de hoy."
     : "No se pudo publicar.";
@@ -629,7 +643,7 @@
 
     const pub = el("button", "c-btn gold", "Publicar en el muro");
     pub.type = "submit";
-    form.append(ta, count, pick, prev, clear, el("small", "c-muted", "Foto opcional: JPG, PNG o WEBP, máximo 5 MB"), pub);
+    form.append(ta, count, pick, prev, clear, el("small", "c-muted", "Foto opcional: JPG, PNG o WEBP, máximo 5 MB. Las publicaciones desaparecen a las 48 horas."), pub);
 
     form.addEventListener("submit", async (e) => {
       e.preventDefault();
@@ -664,7 +678,7 @@
     const card = el("article", "c-post");
     const head = el("div", "c-phead");
     const who = el("div");
-    who.append(el("b", "", p.full_name || "Sin nombre"), el("small", "c-muted", wallTime(p.created_at)));
+    who.append(el("b", "", p.full_name || "Sin nombre"), el("small", "c-muted", wallTime(p.created_at) + " · " + wallLeft(p.created_at)));
     head.append(avatar(p.avatar_path, p.full_name), who);
     card.append(head);
     if (p.body) card.append(el("p", "c-pbody", p.body));
