@@ -925,7 +925,8 @@
     const left = Math.max(0, Math.floor((new Date(access.trial_ends_at).getTime() - Date.now()) / 1000));
     if (left > 0) {
       accessBar.className = "c-access";
-      accessText.textContent = "Prueba gratis: te quedan " + Math.floor(left / 3600) + " h " + Math.floor((left % 3600) / 60) + " min · Fotos: " + access.photos_left + " de 3.";
+      const photoOpen = new Date(access.trial_ends_at).getTime() - 24 * 3600 * 1000 > Date.now();
+      accessText.textContent = "Prueba gratis: te quedan " + Math.floor(left / 3600) + " h " + Math.floor((left % 3600) / 60) + " min · " + (photoOpen ? "Fotos: " + access.photos_left + " de 3." : "Fotos: solo con suscripción.");
     } else {
       accessBar.className = "c-access ended";
       accessText.textContent = "Tu prueba gratuita terminó. Suscríbete para seguir usando fotos y llamadas.";
