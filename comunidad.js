@@ -34,6 +34,7 @@
 
   const BLOCK_MSG = "No se permite compartir teléfonos, redes sociales, correos o enlaces, ni pedir dinero.";
   const isBlocked = (e) => !!e && String(e.message || "").includes("contenido_no_permitido");
+  const INTENTS = { estable: "Relación estable", serio: "Compromiso serio", viajar: "Viajar juntos", familia: "Formar familia", otro_pais: "Vivir en otro país", conocernos: "Conocernos primero" };
   const SVG_OPEN = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">';
   const ICON_CAM = SVG_OPEN + '<path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>';
   const ICON_SEND = SVG_OPEN + '<path d="M4 12l16-8-6 16-3-7z"/></svg>';
@@ -58,6 +59,7 @@
     me = data.session?.user || null;
     enter.style.display = me ? "" : "none";
     if (!me) closeCommunity();
+    startNotifications();
   }
 
   // Copia nombre, país, descripción y foto desde user_metadata a la tabla profiles
@@ -71,6 +73,7 @@
     if (m.country !== undefined) patch.country = m.country || null;
     if (m.description !== undefined) patch.description = m.description || null;
     if (m.avatar_path) patch.avatar_path = m.avatar_path;
+    if (m.intent) patch.intent = m.intent;
     if (Object.keys(patch).length) {
       const { error } = await sb.from("profiles").update(patch).eq("id", u.id);
       if (error) {
@@ -177,6 +180,7 @@
     loadAccess();
     cleanupExpiredStatuses();
     cleanupExpiredPosts();
+    maybeOnboard();
     community.hidden = false;
     document.body.style.overflow = "hidden";
     showTab("discover");
@@ -288,17 +292,36 @@
       return;
     }
     const card = el("article", "c-card full");
-    if (p.avatar_path) {
+    const pics = p.photos && p.photos.length ? p.photos : (p.avatar_path ? [p.avatar_path] : []);
+    if (pics.length) {
       const ph = document.createElement("img");
       ph.className = "c-card-photo";
-      ph.alt = "Foto de " + (p.full_name || "perfil");
-      ph.src = sb.storage.from("avatars").getPublicUrl(p.avatar_path).data.publicUrl;
+      const dots = pics.length > 1 ? pics.map(() => el("i")) : [];
+      let idx = 0;
+      const showPic = () => {
+        ph.src = sb.storage.from("avatars").getPublicUrl(pics[idx]).data.publicUrl;
+        ph.alt = "Foto " + (idx + 1) + " de " + pics.length + " de " + (p.full_name || "perfil");
+        dots.forEach((d, i) => d.classList.toggle("on", i === idx));
+      };
       card.append(ph);
+      if (pics.length > 1) {
+        const bar = el("div", "c-dots");
+        dots.forEach((d) => bar.append(d));
+        card.append(bar);
+        card.addEventListener("click", (ev) => {
+          const r = card.getBoundingClientRect();
+          if (ev.clientY - r.top > r.height * 0.7) return;
+          idx = ev.clientX - r.left < r.width / 2 ? (idx - 1 + pics.length) % pics.length : (idx + 1) % pics.length;
+          showPic();
+        });
+      }
+      showPic();
     }
     if (p.is_verified) card.append(el("span", "c-badge top", "Identidad verificada"));
     const info = el("div", "c-card-info");
     info.append(el("h2", "", (p.full_name || "Sin nombre") + ", " + p.age));
     if (p.country) info.append(el("p", "c-muted", p.country));
+    if (p.intent && INTENTS[p.intent]) info.append(el("span", "c-chip", "Busca: " + INTENTS[p.intent]));
     if (p.description) info.append(el("p", "c-bio", p.description));
     if (p.status || p.statusImage) {
       const st = el("div", "c-status");
@@ -854,7 +877,8 @@
     }
     search.addEventListener("input", () => draw(search.value));
     draw("");
-    box.replaceChildren(search, holder);
+    const nc = notifyCard();
+    box.replaceChildren(...(nc ? [nc] : []), search, holder);
   }
 
   /* ---------- Chat ---------- */
@@ -882,6 +906,8 @@
     leaveChat();
     current = m;
     markSeen(m.match_id);
+    unread.delete(m.match_id);
+    paintUnread();
     seen = new Set();
     $("chat-msgs").replaceChildren();
     $("c-more").hidden = false;
@@ -1124,6 +1150,391 @@
     if (error) { console.error(error); say("No se pudo activar la suscripción de prueba."); return; }
     say("Suscripción de prueba activada.");
     loadPlans();
+  }
+
+  /* ---------- Fotos del perfil, intención y arranque guiado ---------- */
+  const publicUrl = (path) => sb.storage.from("avatars").getPublicUrl(path).data.publicUrl;
+  const EXT = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp" };
+
+  function checkImage(f) {
+    if (!f) return "Elige una foto.";
+    if (!EXT[f.type]) return "Usa una imagen JPG, PNG o WEBP.";
+    if (f.size > 5 * 1024 * 1024) return "La foto no puede superar los 5 MB.";
+    return "";
+  }
+
+  // Mantiene la foto principal también en los datos del usuario (los lee el perfil clásico)
+  async function syncMainPhoto(path) {
+    try { await sb.auth.updateUser({ data: { avatar_path: path || "" } }); } catch (e) { console.error(e); }
+    const img = $("profile-avatar");
+    if (img) {
+      if (path) { img.src = publicUrl(path); img.style.display = "block"; }
+      else { img.removeAttribute("src"); img.style.display = "none"; }
+    }
+  }
+
+  async function addPhoto(f) {
+    const bad = checkImage(f);
+    if (bad) return { error: bad };
+    const path = me.id + "/photo-" + Date.now() + "." + EXT[f.type];
+    const up = await sb.storage.from("avatars").upload(path, f, { contentType: f.type, upsert: false });
+    if (up.error) { console.error(up.error); return { error: "No se pudo subir la foto." }; }
+    const { error } = await sb.rpc("add_profile_photo", { p_path: path });
+    if (error) {
+      console.error(error);
+      await sb.storage.from("avatars").remove([path]);
+      return { error: String(error.message || "").includes("limite_fotos_perfil") ? "Ya tienes 6 fotos. Borra una para añadir otra." : "No se pudo guardar la foto." };
+    }
+    return { path };
+  }
+
+  async function listPhotos() {
+    let { data, error } = await sb.from("profile_photos").select("id,path,position").order("position");
+    if (error) { console.error(error); return null; }
+    if (!data.length) {
+      // migra la foto que ya tenía la persona a la nueva lista
+      const { data: row } = await sb.from("profiles").select("avatar_path").eq("id", me.id).single();
+      if (row && row.avatar_path) {
+        await sb.rpc("add_profile_photo", { p_path: row.avatar_path });
+        const again = await sb.from("profile_photos").select("id,path,position").order("position");
+        data = again.data || [];
+      }
+    }
+    return data;
+  }
+
+  const photosDialog = $("photos-dialog");
+  async function renderPhotos() {
+    const grid = $("photos-grid");
+    const msg = $("photos-msg");
+    grid.replaceChildren(el("p", "c-muted", "Cargando…"));
+    const rows = await listPhotos();
+    if (!rows) { grid.replaceChildren(el("p", "c-muted", "No se pudieron cargar tus fotos.")); return; }
+    const nodes = rows.map((r, i) => {
+      const tile = el("div", "c-ptile");
+      const img = document.createElement("img");
+      img.src = publicUrl(r.path);
+      img.alt = "Foto " + (i + 1);
+      tile.append(img);
+      if (i === 0) tile.append(el("span", "c-ptag", "Principal"));
+      const acts = el("div", "c-pt-acts");
+      if (i !== 0) {
+        const mk = el("button", "c-link", "Hacer principal");
+        mk.type = "button";
+        mk.onclick = async () => {
+          const { data: path, error } = await sb.rpc("set_main_photo", { p_photo: r.id });
+          if (error) { console.error(error); msg.textContent = "No se pudo cambiar la foto principal."; return; }
+          await syncMainPhoto(path);
+          renderPhotos();
+        };
+        acts.append(mk);
+      }
+      const del = el("button", "c-link", "Borrar");
+      del.type = "button";
+      del.onclick = async () => {
+        if (!confirm("¿Borrar esta foto?")) return;
+        const { data: path, error } = await sb.rpc("delete_profile_photo", { p_photo: r.id });
+        if (error) { console.error(error); msg.textContent = "No se pudo borrar la foto."; return; }
+        if (path) { try { await sb.storage.from("avatars").remove([path]); } catch (e) { console.error(e); } }
+        const left = await listPhotos();
+        await syncMainPhoto(left && left[0] ? left[0].path : "");
+        renderPhotos();
+      };
+      acts.append(del);
+      tile.append(acts);
+      return tile;
+    });
+    if (rows.length < 6) {
+      const add = el("label", "c-ptile c-padd");
+      const input = document.createElement("input");
+      input.type = "file";
+      input.accept = "image/jpeg,image/png,image/webp";
+      input.className = "sr-only";
+      add.append(document.createTextNode("+ Añadir foto"), input);
+      input.addEventListener("change", async () => {
+        const f = input.files[0];
+        input.value = "";
+        if (!f) return;
+        msg.textContent = "Subiendo…";
+        const r = await addPhoto(f);
+        if (r.error) { msg.textContent = r.error; return; }
+        msg.textContent = "";
+        if (!rows.length) await syncMainPhoto(r.path);
+        renderPhotos();
+      });
+      nodes.push(add);
+    }
+    grid.replaceChildren(...nodes);
+  }
+  const managePhotos = $("manage-photos");
+  if (managePhotos && photosDialog) {
+    managePhotos.addEventListener("click", () => {
+      if (!me) return;
+      $("photos-msg").textContent = "";
+      photosDialog.showModal();
+      renderPhotos();
+    });
+    $("close-photos").addEventListener("click", () => photosDialog.close());
+  }
+
+  // "¿Qué buscas?" dentro de Mi perfil
+  const intentSel = $("profile-intent");
+  if (intentSel) {
+    $("profile").addEventListener("click", async () => {
+      const { data } = await sb.auth.getUser();
+      intentSel.value = (data.user && data.user.user_metadata && data.user.user_metadata.intent) || "";
+    });
+    intentSel.addEventListener("change", async () => {
+      if (!intentSel.value) return;
+      const { error } = await sb.auth.updateUser({ data: { intent: intentSel.value } });
+      if (error) { console.error(error); alert("No se pudo guardar lo que buscas."); }
+    });
+  }
+
+  // Arranque guiado: solo pide lo que falta
+  async function maybeOnboard() {
+    try { if (Number(localStorage.getItem("em_onb_skip") || 0) > Date.now()) return; } catch (e) { /* sin almacenamiento */ }
+    const { data: p } = await sb.from("profiles").select("full_name,country,description,avatar_path,intent").eq("id", me.id).single();
+    if (!p) return;
+    if (p.avatar_path && p.country && (p.description || "").trim() && p.intent) return;
+    startOnboarding(p);
+  }
+
+  function startOnboarding(p) {
+    const st = { country: p.country || "", description: p.description || "", intent: p.intent || "", photoPath: "" };
+    const steps = [];
+    if (!p.avatar_path) steps.push("photo");
+    if (!p.country || !(p.description || "").trim()) steps.push("about");
+    if (!p.intent) steps.push("intent");
+    if (!steps.length) return;
+    let n = 0;
+
+    const over = el("div", "c-onboard");
+    over.setAttribute("role", "dialog");
+    over.setAttribute("aria-modal", "true");
+    over.setAttribute("aria-label", "Completa tu perfil");
+    const card = el("div", "c-ob-card");
+    const dots = el("div", "c-ob-dots");
+    const body = el("div");
+    const msg = el("p", "c-ob-msg");
+    msg.setAttribute("role", "status");
+    const nav = el("div", "c-ob-nav");
+    const back = el("button", "c-btn ghost", "Atrás");
+    back.type = "button";
+    const next = el("button", "c-btn gold", "Siguiente");
+    next.type = "button";
+    nav.append(back, next);
+    const later = el("button", "c-link", "Ahora no");
+    later.type = "button";
+    card.append(dots, body, msg, nav, later);
+    over.append(card);
+    document.body.append(over);
+
+    later.onclick = () => {
+      try { localStorage.setItem("em_onb_skip", String(Date.now() + 24 * 3600 * 1000)); } catch (e) { /* nada */ }
+      over.remove();
+    };
+
+    let aboutSel, aboutTa;
+    function render() {
+      const key = steps[n];
+      msg.textContent = "";
+      dots.replaceChildren(...steps.map((_, i) => el("i", i <= n ? "on" : "")));
+      back.hidden = n === 0;
+      next.textContent = n === steps.length - 1 ? "Listo" : "Siguiente";
+      next.disabled = false;
+      body.replaceChildren();
+      if (key === "photo") {
+        body.append(el("h2", "", "Tu foto principal"), el("p", "c-muted", "Las personas con foto reciben muchos más «me gusta». Después podrás añadir hasta 6."));
+        const prev = document.createElement("img");
+        prev.className = "c-ob-photo";
+        prev.alt = "Tu foto principal";
+        if (st.photoPath) prev.src = publicUrl(st.photoPath); else prev.hidden = true;
+        const pick = el("label", "c-btn ghost c-pick");
+        const input = document.createElement("input");
+        input.type = "file";
+        input.accept = "image/jpeg,image/png,image/webp";
+        input.className = "sr-only";
+        pick.append(document.createTextNode(st.photoPath ? "Cambiar foto" : "Elegir foto"), input);
+        input.addEventListener("change", async () => {
+          const f = input.files[0];
+          input.value = "";
+          if (!f) return;
+          msg.textContent = "Subiendo…";
+          next.disabled = true;
+          const r = await addPhoto(f);
+          next.disabled = false;
+          if (r.error) { msg.textContent = r.error; return; }
+          st.photoPath = r.path;
+          await syncMainPhoto(r.path);
+          render();
+        });
+        body.append(prev, pick);
+        next.disabled = !st.photoPath;
+      } else if (key === "about") {
+        body.append(el("h2", "", "Cuéntanos de ti"));
+        aboutSel = document.createElement("select");
+        aboutSel.setAttribute("aria-label", "País de residencia");
+        aboutSel.innerHTML = $("profile-country").innerHTML;
+        aboutSel.value = st.country;
+        aboutTa = document.createElement("textarea");
+        aboutTa.rows = 4;
+        aboutTa.maxLength = 500;
+        aboutTa.placeholder = "Un poco sobre ti y lo que buscas";
+        aboutTa.setAttribute("aria-label", "Sobre mí");
+        aboutTa.value = st.description;
+        body.append(aboutSel, aboutTa);
+      } else {
+        body.append(el("h2", "", "¿Qué buscas?"), el("p", "c-muted", "Así encontraremos personas con tus mismas metas."));
+        const opts = el("div", "c-ob-options");
+        opts.setAttribute("role", "group");
+        Object.entries(INTENTS).forEach(([k, label]) => {
+          const b = el("button", "c-ob-opt", label);
+          b.type = "button";
+          b.setAttribute("aria-pressed", st.intent === k ? "true" : "false");
+          b.onclick = () => { st.intent = k; render(); };
+          opts.append(b);
+        });
+        body.append(opts);
+        next.disabled = !st.intent;
+      }
+    }
+
+    back.onclick = () => { collect(); n = Math.max(0, n - 1); render(); };
+    function collect() {
+      if (steps[n] === "about" && aboutSel) { st.country = aboutSel.value; st.description = aboutTa.value; }
+    }
+    next.onclick = async () => {
+      collect();
+      const key = steps[n];
+      if (key === "about" && (!st.country || st.description.trim().length < 10)) {
+        msg.textContent = "Elige tu país y escribe al menos 10 caracteres sobre ti.";
+        return;
+      }
+      if (n < steps.length - 1) { n += 1; render(); return; }
+      next.disabled = true;
+      msg.textContent = "Guardando…";
+      const patch = {};
+      if (st.country) patch.country = st.country;
+      if (st.description.trim()) patch.description = st.description.trim();
+      if (st.intent) patch.intent = st.intent;
+      const { error } = await sb.from("profiles").update(patch).eq("id", me.id);
+      if (error) {
+        console.error(error);
+        msg.textContent = isBlocked(error) ? "Tu descripción no puede incluir teléfonos, redes sociales, correos o enlaces, ni pedir dinero." : "No se pudo guardar. Inténtalo de nuevo.";
+        next.disabled = false;
+        if (isBlocked(error)) { n = steps.indexOf("about"); if (n >= 0) render(); }
+        return;
+      }
+      await sb.auth.updateUser({ data: { country: st.country, description: st.description.trim(), intent: st.intent } });
+      over.remove();
+      say("Listo: tu perfil está completo.");
+      if (view === "discover") loadDiscover();
+    };
+    render();
+  }
+
+  /* ---------- Avisos de mensajes y coincidencias ---------- */
+  if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch((e) => console.error("sw", e));
+
+  const matchCache = new Map();
+  const unread = new Set();
+  let notifChannel = null;
+  let notifFor = null;
+  const isUnread = (m) => (m.last_at
+    ? m.last_sender !== me.id && new Date(m.last_at).getTime() > getSeen(m.match_id)
+    : getSeen(m.match_id) === 0);
+
+  function paintUnread() {
+    const btn = community.querySelector('.c-tabs button[data-tab="matches"]');
+    if (btn) {
+      const old = btn.querySelector(".c-tab-badge");
+      if (old) old.remove();
+      if (unread.size) btn.append(el("span", "c-tab-badge", unread.size > 9 ? "9+" : String(unread.size)));
+    }
+    try {
+      if (navigator.setAppBadge) {
+        const p = unread.size ? navigator.setAppBadge(unread.size) : navigator.clearAppBadge();
+        if (p && p.catch) p.catch(() => {});
+      }
+    } catch (e) { /* sin soporte */ }
+  }
+
+  async function refreshMatchCache() {
+    if (!me) return;
+    const { data } = await sb.rpc("get_my_matches").select("*");
+    matchCache.clear();
+    unread.clear();
+    (data || []).forEach((m) => { matchCache.set(m.match_id, m); if (isUnread(m)) unread.add(m.match_id); });
+    paintUnread();
+  }
+
+  async function notify(title, body, tag) {
+    if (!("Notification" in window) || Notification.permission !== "granted" || !document.hidden) return;
+    try {
+      const reg = await navigator.serviceWorker.ready;
+      reg.showNotification(title, { body, icon: "icon-192.png", badge: "icon-192.png", tag, data: { url: "./" } });
+    } catch (e) { console.error(e); }
+  }
+
+  async function onNewMessage(payload) {
+    const m = payload.new;
+    if (!me || m.sender_id === me.id) return;
+    if (!community.hidden && current && current.match_id === m.match_id) { markSeen(m.match_id); return; }
+    let info = matchCache.get(m.match_id);
+    if (!info) { await refreshMatchCache(); info = matchCache.get(m.match_id); }
+    unread.add(m.match_id);
+    paintUnread();
+    const name = (info && info.full_name) || "alguien";
+    if (!community.hidden) say("Nuevo mensaje de " + name);
+    notify("Nuevo mensaje", name + " te escribió.", "msg-" + m.match_id);
+    if (!community.hidden && view === "matches") loadMatches();
+  }
+
+  async function onNewMatch(payload) {
+    const r = payload.new;
+    if (!me || (r.user_a !== me.id && r.user_b !== me.id)) return;
+    await refreshMatchCache();
+    const m = matchCache.get(r.id);
+    const name = (m && m.full_name) || "alguien";
+    if (!community.hidden) say("¡Nueva coincidencia con " + name + "!");
+    notify("¡Nueva coincidencia!", "Tú y " + name + " se dieron «Me gusta».", "match-" + r.id);
+    if (!community.hidden && view === "matches") loadMatches();
+  }
+
+  function startNotifications() {
+    if (!me) { stopNotifications(); return; }
+    if (notifFor === me.id) return;
+    stopNotifications();
+    notifFor = me.id;
+    notifChannel = sb.channel("notif-" + me.id)
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages" }, onNewMessage)
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "matches" }, onNewMatch)
+      .subscribe();
+    refreshMatchCache();
+  }
+
+  function stopNotifications() {
+    if (notifChannel) { sb.removeChannel(notifChannel); notifChannel = null; }
+    notifFor = null;
+    unread.clear();
+    matchCache.clear();
+    paintUnread();
+  }
+
+  function notifyCard() {
+    if (!("Notification" in window) || Notification.permission !== "default") return null;
+    const card = el("div", "c-banner");
+    card.append(el("p", "", "Activa los avisos para enterarte de mensajes y coincidencias nuevas."));
+    const b = el("button", "c-btn gold", "Activar avisos");
+    b.type = "button";
+    b.onclick = async () => {
+      const r = await Notification.requestPermission();
+      say(r === "granted" ? "Avisos activados." : "No se activaron los avisos.");
+      card.remove();
+    };
+    card.append(b);
+    return card;
   }
 
   /* ---------- Eliminar cuenta ---------- */

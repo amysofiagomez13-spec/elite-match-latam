@@ -332,3 +332,44 @@ footer a, .signup-consent a { color: var(--gold-light); }
 .c-world { align-self: flex-start; display: flex; align-items: center; gap: 8px; min-height: 44px; margin-bottom: 10px; padding: 0 16px; border: 1px solid var(--gold); border-radius: 999px; background: rgba(0, 0, 0, .35); color: var(--gold-light); font-size: 14px; cursor: pointer; }
 .c-row[aria-current="true"] b { color: var(--gold-light); }
 .signup-dialog select { display: block; width: 100%; box-sizing: border-box; height: 48px; padding: 0 14px; border: 1px solid var(--line); border-radius: 12px; background: #0b0c0f; color: var(--text); font-size: 16px; }
+
+/* Fotos del perfil, intención, arranque guiado y avisos */
+.profile-photo label[for="profile-photo-input"] { display: none !important; }
+.signup-dialog #manage-photos { width: 100%; min-height: 48px; }
+
+.c-chip { display: inline-block; margin: 0 0 8px; padding: 4px 12px; border: 1px solid var(--gold); border-radius: 999px; color: var(--gold-light); font-size: 12px; }
+.c-dots { position: absolute; top: 10px; left: 14px; right: 14px; z-index: 2; display: flex; gap: 4px; }
+.c-dots i { flex: 1; height: 3px; border-radius: 2px; background: rgba(255, 255, 255, .35); }
+.c-dots i.on { background: var(--gold-light); }
+.c-card.full .c-badge.top { top: 24px; }
+
+.c-tabs button { position: relative; }
+.c-tab-badge { position: absolute; top: 2px; left: calc(50% + 6px); min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px; background: var(--gold-light); color: #171006; font-size: 11px; font-weight: 700; line-height: 18px; text-align: center; box-sizing: border-box; }
+
+.c-onboard { position: fixed; inset: 0; z-index: 60; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(0, 0, 0, .88); }
+.c-ob-card { width: min(100%, 440px); max-height: 100%; overflow-y: auto; box-sizing: border-box; padding: 22px; display: flex; flex-direction: column; gap: 12px; border: 1px solid var(--gold); border-radius: 20px; background: #111216; color: var(--text); }
+.c-ob-card h2 { margin: 0; font: 500 24px Georgia, serif; color: var(--gold-light); }
+.c-ob-card p { margin: 0; }
+.c-ob-dots { display: flex; gap: 6px; }
+.c-ob-dots i { flex: 1; height: 4px; border-radius: 2px; background: var(--line); }
+.c-ob-dots i.on { background: var(--gold); }
+.c-ob-photo { display: block; width: 160px; height: 160px; margin: 12px auto; object-fit: cover; border-radius: 50%; border: 2px solid var(--gold); }
+.c-ob-photo[hidden] { display: none; }
+.c-ob-card select, .c-ob-card textarea { display: block; width: 100%; box-sizing: border-box; margin-top: 10px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; background: #0b0c0f; color: var(--text); font-size: 16px; font-family: inherit; }
+.c-ob-card select { height: 48px; padding: 0 14px; }
+.c-ob-options { display: grid; gap: 8px; }
+.c-ob-opt { min-height: 48px; padding: 0 14px; border: 1px solid var(--line); border-radius: 12px; background: #0b0c0f; color: var(--text); font-size: 16px; text-align: left; cursor: pointer; }
+.c-ob-opt[aria-pressed="true"] { border-color: var(--gold); color: var(--gold-light); }
+.c-ob-nav { display: flex; gap: 10px; }
+.c-ob-nav .c-btn { flex: 1; min-height: 48px; }
+.c-ob-nav [hidden] { display: none; }
+.c-ob-msg { min-height: 20px; font-size: 14px; color: var(--gold-light); }
+
+.c-pgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 12px 0; }
+.c-ptile { position: relative; overflow: hidden; border-radius: 12px; background: #1a1218; aspect-ratio: 3 / 4; }
+.c-ptile img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.c-ptag { position: absolute; top: 6px; left: 6px; padding: 3px 8px; border-radius: 999px; background: rgba(5, 6, 7, .8); color: var(--gold-light); font-size: 11px; }
+.c-pt-acts { position: absolute; left: 0; right: 0; bottom: 0; display: flex; justify-content: space-between; gap: 6px; padding: 20px 8px 6px; background: linear-gradient(transparent, rgba(5, 6, 7, .92)); }
+.c-pt-acts .c-link { align-self: auto; min-height: 36px; padding: 0; font-size: 12px; color: var(--text); }
+.c-padd { display: grid; place-items: center; border: 1px dashed var(--gold); color: var(--gold-light); font-size: 14px; text-align: center; cursor: pointer; }
+#photos-msg { min-height: 20px; font-size: 14px; text-align: center; }
