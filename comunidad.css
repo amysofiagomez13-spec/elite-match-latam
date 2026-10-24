@@ -373,3 +373,13 @@ footer a, .signup-consent a { color: var(--gold-light); }
 .c-pt-acts .c-link { align-self: auto; min-height: 36px; padding: 0; font-size: 12px; color: var(--text); }
 .c-padd { display: grid; place-items: center; border: 1px dashed var(--gold); color: var(--gold-light); font-size: 14px; text-align: center; cursor: pointer; }
 #photos-msg { min-height: 20px; font-size: 14px; text-align: center; }
+
+/* Barra de escritura pegada arriba de los botones de abajo */
+.c-dockhost { flex: none; padding: 8px 12px 6px; background: #0a0709; border-top: 1px solid var(--line); }
+.c-dockhost[hidden] { display: none; }
+.c-dockwrap { position: static; margin: 0; padding: 0; background: none; z-index: auto; }
+.c-dock-row textarea { max-height: 140px; }
+#chat-form { align-items: flex-end; }
+#chat-form #chat-text { height: auto; min-height: 44px; max-height: 140px; padding: 11px 6px; border: 0; background: transparent; color: var(--text); font-family: inherit; font-size: 16px; line-height: 1.35; resize: none; outline: none; }
+.c-toast { min-height: 0; padding: 2px 16px; }
+.c-toast:empty { display: none; }

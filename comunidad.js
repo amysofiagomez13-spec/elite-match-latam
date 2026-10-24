@@ -140,6 +140,13 @@
   setTab(wallTab, TAB_ICONS.wall, "Muro");
   setTab($("c-profile"), TAB_ICONS.profile, "Perfil");
 
+  // Barra de escritura: vive justo encima de los botones de abajo y crece hacia arriba
+  const dockHost = el("div", "c-dockhost");
+  dockHost.hidden = true;
+  community.insertBefore(dockHost, community.querySelector(".c-tabs"));
+  const setDock = (node) => { dockHost.replaceChildren(node); dockHost.hidden = false; };
+  const clearDock = () => { dockHost.replaceChildren(); dockHost.hidden = true; };
+
   function leaveChat() {
     if (channel) { sb.removeChannel(channel); channel = null; }
     current = null;
@@ -149,6 +156,7 @@
 
   function showView(name) {
     view = name;
+    if (name === "chat") setDock(chatDock); else clearDock();
     Object.entries(views).forEach(([k, v]) => (v.hidden = k !== name));
     $("c-title").textContent = titles[name] || (current ? current.full_name : "Chat");
     document.querySelectorAll(".c-tabs button[data-tab]").forEach((b) => {
@@ -402,7 +410,7 @@
 
     ta.addEventListener("input", () => {
       ta.style.height = "auto";
-      ta.style.height = Math.min(ta.scrollHeight, 120) + "px";
+      ta.style.height = Math.min(ta.scrollHeight, 140) + "px";
       count.textContent = ta.value.length ? ta.value.length + "/" + opts.max : "";
     });
     file.addEventListener("change", () => {
@@ -561,8 +569,8 @@
       });
       parts.push(list);
     }
-    parts.push(composer);
     box.replaceChildren(...parts);
+    if (view === "status") setDock(composer);
   }
 
   /* ---------- Comentarios del muro (solo con suscripción o en la prueba) ---------- */
@@ -796,8 +804,8 @@
     const posts = data || [];
     if (!posts.length) parts.push(el("p", "c-empty", "Aún no hay publicaciones. Sé la primera persona en publicar."));
     posts.forEach((p) => parts.push(wallPost(p)));
-    parts.push(wallComposer());
     box.replaceChildren(...parts);
+    if (view === "wall") setDock(wallComposer());
   }
 
   /* ---------- Coincidencias ---------- */
@@ -1042,8 +1050,26 @@
   }
   chatForm.prepend(photoBtn);
   chatForm.append(photoInput);
+
+  // El campo del chat crece a medida que se escribe (hasta unas 5 líneas)
+  const oldChatInput = $("chat-text");
+  const chatTa = document.createElement("textarea");
+  chatTa.id = "chat-text";
+  chatTa.rows = 1;
+  chatTa.maxLength = 2000;
+  chatTa.autocomplete = "off";
+  chatTa.placeholder = oldChatInput.placeholder;
+  chatTa.setAttribute("aria-label", "Escribe un mensaje");
+  oldChatInput.replaceWith(chatTa);
+  const growChat = () => { chatTa.style.height = "auto"; chatTa.style.height = Math.min(chatTa.scrollHeight, 140) + "px"; };
+  chatTa.addEventListener("input", growChat);
+  chatTa.addEventListener("keydown", (ev) => {
+    if (ev.key === "Enter" && !ev.shiftKey && window.matchMedia("(pointer: fine)").matches) { ev.preventDefault(); chatForm.requestSubmit(); }
+  });
+  chatForm.addEventListener("submit", () => setTimeout(growChat, 0));
+
   const chatDock = el("div", "c-dockwrap");
-  chatForm.replaceWith(chatDock);
+  chatForm.remove();
   chatDock.append(chatForm);
 
   const photoError = (e) => {
