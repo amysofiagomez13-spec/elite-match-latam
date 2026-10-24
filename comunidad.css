@@ -390,3 +390,16 @@ footer a, .signup-consent a { color: var(--gold-light); }
 .link-danger[hidden] { display: none; }
 #footer-account .link-danger { display: inline; margin: 0; min-height: 0; padding: 6px 2px; font-size: inherit; }
 #footer-account #delete-message { margin-left: 6px; color: var(--gold-light); }
+
+/* v25: sin "Mi perfil" en la portada, fotos con su proporción natural y pantalla de Likes */
+#profile { display: none !important; }
+
+.c-st-img { width: 100%; height: auto; max-height: 75vh; object-fit: contain; border-radius: 12px; background: #000; }
+.c-card-info .c-st-img { width: auto; max-width: 100%; max-height: 110px; }
+.c-msg-img { display: block; width: 100%; height: auto; max-height: 60vh; object-fit: contain; }
+.c-msg:has(> .c-msg-img) { width: 240px; max-width: 76%; }
+.c-card-photo { object-fit: cover; object-position: center 25%; }
+
+.c-blur { filter: blur(5px); }
+.c-lacts { display: flex; align-items: center; gap: 12px; margin-top: 8px; }
+.c-lacts .c-btn { flex: none; min-height: 44px; padding: 0 22px; }

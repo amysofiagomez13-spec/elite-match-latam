@@ -103,7 +103,6 @@
   const statusTab = el("button", "", "Estados");
   statusTab.type = "button";
   statusTab.dataset.tab = "status";
-  community.querySelector('.c-tabs button[data-tab="matches"]').after(statusTab);
 
   const vPlans = el("div", "c-view");
   vPlans.id = "v-plans";
@@ -121,14 +120,23 @@
   wallTab.type = "button";
   wallTab.dataset.tab = "wall";
   community.querySelector('.c-tabs button[data-tab="discover"]').after(wallTab);
+  const vLikes = el("div", "c-view");
+  vLikes.id = "v-likes";
+  vLikes.hidden = true;
+  vStatus.after(vLikes);
+  const likesTab = el("button", "", "Likes");
+  likesTab.type = "button";
+  likesTab.dataset.tab = "likes";
+  wallTab.after(likesTab);
 
-  const views = { discover: $("v-discover"), matches: $("v-matches"), chat: $("v-chat"), status: vStatus, plans: vPlans, wall: vWall, world: vWorld };
-  const titles = { discover: "Descubrir", matches: "Chat", status: "Estados", plans: "Planes", wall: "Muro", world: "Explorar el mundo" };
+  const views = { discover: $("v-discover"), matches: $("v-matches"), chat: $("v-chat"), status: vStatus, plans: vPlans, wall: vWall, world: vWorld, likes: vLikes };
+  const titles = { discover: "Descubrir", matches: "Chat", status: "Estados", plans: "Planes", wall: "Muro", world: "Explorar el mundo", likes: "Likes" };
 
   const TAB_ICONS = {
     discover: '<circle cx="12" cy="12" r="9"/><path d="M15 9l-2 6-4 0 2-6z"/>',
     matches: '<path d="M5 5h14v10H9l-4 4z"/>',
     wall: '<rect x="4" y="5" width="16" height="14" rx="2"/><path d="M8 10h8M8 14h5"/>',
+    likes: '<path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.5A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/>',
     status: '<circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="9" stroke-dasharray="3 3"/>',
     profile: '<circle cx="12" cy="8" r="4"/><path d="M4 20c1-4 4-6 8-6s7 2 8 6"/>'
   };
@@ -140,6 +148,7 @@
   setTab(community.querySelector('.c-tabs button[data-tab="matches"]'), TAB_ICONS.matches, "Chat");
   setTab(statusTab, TAB_ICONS.status, "Estados");
   setTab(wallTab, TAB_ICONS.wall, "Muro");
+  setTab(likesTab, TAB_ICONS.likes, "Likes");
   setTab($("c-profile"), TAB_ICONS.profile, "Perfil");
 
   // Barra de escritura: vive justo encima de los botones de abajo y crece hacia arriba
@@ -176,6 +185,7 @@
     if (name === "plans") loadPlans();
     if (name === "wall") loadWall();
     if (name === "world") loadWorld();
+    if (name === "likes") loadLikes();
   }
 
   function closeCommunity() {
@@ -191,6 +201,7 @@
     cleanupExpiredStatuses();
     cleanupExpiredPosts();
     maybeOnboard();
+    refreshLikes();
     community.hidden = false;
     document.body.style.overflow = "hidden";
     showTab("discover");
@@ -198,7 +209,7 @@
 
   $("c-home").addEventListener("click", () => {
     if (current) showTab("matches");
-    else if (view === "plans" || view === "world") showTab("discover");
+    else if (view === "plans" || view === "world" || view === "status") showTab("discover");
     else closeCommunity();
   });
   community.querySelectorAll(".c-tabs button[data-tab]").forEach((b) =>
@@ -627,7 +638,7 @@
       }));
     }
 
-    if (access && (access.subscribed || access.in_trial)) {
+    if (access && (access.subscribed || access.in_trial || access.restrictions === false)) {
       const form = el("form", "c-cform");
       const input = document.createElement("input");
       input.type = "text";
@@ -675,6 +686,82 @@
     });
     wrap.append(btn);
     return wrap;
+  }
+
+  /* ---------- Likes: quién te dio "Me gusta" ---------- */
+  let likesCount = 0;
+  function paintLikesBadge() {
+    const old = likesTab.querySelector(".c-tab-badge");
+    if (old) old.remove();
+    if (likesCount) likesTab.append(el("span", "c-tab-badge", likesCount > 9 ? "9+" : String(likesCount)));
+  }
+
+  async function refreshLikes() {
+    if (!me) return;
+    const { data, error } = await sb.rpc("get_my_likes").select("user_id,locked");
+    if (error) { console.error(error); return; }
+    likesCount = (data || []).length;
+    paintLikesBadge();
+  }
+
+  async function loadLikes() {
+    const box = views.likes;
+    box.replaceChildren(el("p", "c-empty", "Cargando…"));
+    const { data, error } = await sb.rpc("get_my_likes").select("*");
+    if (error) { console.error(error); box.replaceChildren(el("p", "c-empty", "No se pudieron cargar tus «Me gusta».")); return; }
+    const rows = data || [];
+    likesCount = rows.length;
+    paintLikesBadge();
+    if (!rows.length) {
+      box.replaceChildren(el("p", "c-empty", "Aún nadie te ha dado «Me gusta». Completa tu perfil y publica en el muro para que te vean."));
+      return;
+    }
+    const locked = rows[0].locked;
+    const parts = [el("p", "c-muted", rows.length + (rows.length === 1 ? " persona te dio «Me gusta»" : " personas te dieron «Me gusta»"))];
+    if (locked) {
+      const card = el("div", "c-banner");
+      card.append(el("p", "", "Suscríbete para ver quiénes son y poder responderles."));
+      const b = el("button", "c-btn gold", "Ver planes");
+      b.type = "button";
+      b.onclick = () => showTab("plans");
+      card.append(b);
+      parts.push(card);
+    }
+    const list = el("div", "c-list");
+    rows.forEach((r) => {
+      const row = el("div", "c-row static");
+      const t = el("div");
+      if (locked) {
+        row.append(el("div", "c-av c-blur", "?"));
+        t.append(el("b", "", "Alguien"), el("small", "", wallTime(r.created_at)));
+      } else {
+        row.append(avatar(r.avatar_path, r.full_name));
+        t.append(
+          el("b", "", (r.full_name || "Sin nombre") + ", " + r.age),
+          el("small", "", [r.country, r.intent && INTENTS[r.intent]].filter(Boolean).join(" · "))
+        );
+        const acts = el("div", "c-lacts");
+        const like = el("button", "c-btn gold", "Me gusta");
+        like.type = "button";
+        like.onclick = async () => {
+          like.disabled = true;
+          const { error: err } = await sb.from("likes").insert({ from_user: me.id, to_user: r.user_id });
+          if (err && err.code !== "23505") { console.error(err); say("No se pudo enviar. Inténtalo de nuevo."); like.disabled = false; return; }
+          say("¡Es una coincidencia! Ya pueden escribirse.");
+          refreshMatchCache();
+          loadLikes();
+        };
+        const skip = el("button", "c-link", "Descartar");
+        skip.type = "button";
+        skip.onclick = () => { row.remove(); likesCount = Math.max(0, likesCount - 1); paintLikesBadge(); };
+        acts.append(like, skip);
+        t.append(acts);
+      }
+      row.append(t);
+      list.append(row);
+    });
+    parts.push(list);
+    box.replaceChildren(...parts);
   }
 
   /* ---------- Explorar por país ---------- */
@@ -1008,7 +1095,7 @@
   const fmtDate = (iso) => new Date(iso).toLocaleDateString("es-CO", { day: "numeric", month: "long", year: "numeric" });
 
   function paintAccess() {
-    if (!access) { accessBar.hidden = true; return; }
+    if (!access || access.restrictions === false) { accessBar.hidden = true; return; }
     accessBar.hidden = false;
     if (access.subscribed) {
       accessBar.className = "c-access";
@@ -1082,7 +1169,7 @@
   };
 
   photoBtn.addEventListener("click", () => {
-    if (access && !access.subscribed && access.photos_left <= 0) {
+    if (access && access.restrictions !== false && !access.subscribed && access.photos_left <= 0) {
       say(access.in_trial ? "Ya no tienes fotos disponibles en la prueba gratuita." : "Las fotos requieren suscripción.");
       return;
     }
