@@ -401,3 +401,20 @@ footer a, .signup-consent a { color: var(--gold-light); }
 .c-ptile img { object-fit: contain; background: #0b0c0f; }
 .c-dock-prev img { object-fit: contain; background: #0b0c0f; }
 .c-acts { margin-top: 10px; }
+
+/* Botones de Descubrir, Boost y cuadro de fotos del perfil */
+.c-actions { display: flex; align-items: center; justify-content: center; gap: 12px; margin-top: 12px; }
+.c-circle { display: grid; place-items: center; width: 50px; height: 50px; padding: 0; border: 1px solid var(--line); border-radius: 50%; background: #17111a; color: var(--text); cursor: pointer; }
+.c-circle.big { width: 64px; height: 64px; }
+.c-circle.star { border-color: var(--gold); color: var(--gold-light); }
+.c-circle.gold { border: 0; background: linear-gradient(135deg, #ffe2a0, #d7a344); color: #171006; }
+.c-circle:disabled { opacity: .5; }
+.c-toprow { display: flex; flex-wrap: wrap; gap: 8px; }
+.c-boost { color: var(--gold-light); }
+
+#profile-avatar { display: none !important; }
+.c-strip { display: flex; gap: 8px; overflow-x: auto; padding: 10px; margin: 6px 0 10px; border: 1px solid var(--line); border-radius: 14px; background: rgba(0, 0, 0, .25); scrollbar-width: none; }
+.c-strip::-webkit-scrollbar { display: none; }
+.c-strip img { flex: none; width: 76px; height: 100px; object-fit: cover; border-radius: 10px; border: 1px solid var(--line); }
+.c-strip img.main { border: 2px solid var(--gold); }
+.c-strip p { margin: 4px 2px; font-size: 14px; }
