@@ -6,9 +6,9 @@
   <meta name="theme-color" content="#08090b">
   <meta name="description" content="Elite Match LatAm: conexiones auténticas y relaciones con propósito para mayores de 28 años.">
   <title>Elite Match LatAm | Conexiones auténticas</title>
-  <link rel="stylesheet" href="styles.css?v=23">
-  <link rel="stylesheet" href="polish.css?v=23">
-  <link rel="stylesheet" href="comunidad.css?v=23">
+  <link rel="stylesheet" href="styles.css?v=24">
+  <link rel="stylesheet" href="polish.css?v=24">
+  <link rel="stylesheet" href="comunidad.css?v=24">
   <link rel="manifest" href="manifest.json">
 </head>
 <body>
@@ -153,14 +153,11 @@
         </select>
 
         <label for="profile-description">Sobre mí</label>
-        <textarea id="profile-description" rows="4" maxlength="500" placeholder="Cuéntanos un poco sobre ti"></textarea>
+        <textarea id="profile-description" rows="6" maxlength="500" placeholder="Cuéntanos un poco sobre ti"></textarea>
 
         <button class="button primary" type="submit">Guardar perfil →</button>
         <p id="profile-message" role="status"></p>
       </form>
-
-      <button type="button" class="link-danger" id="delete-account">Eliminar mi cuenta</button>
-      <p id="delete-message" role="status"></p>
     </dialog>
 
     <footer>
@@ -168,7 +165,7 @@
       <span data-i18n="tagline">
         Latinoamérica y el mundo, en un solo lugar.
       </span>
-      <span><a href="terminos.html">Condiciones de uso</a> · <a href="privacidad.html">Privacidad</a></span>
+      <span><a href="terminos.html">Condiciones de uso</a> · <a href="privacidad.html">Privacidad</a><span id="footer-account" hidden> · <button type="button" class="link-danger" id="delete-account">Eliminar mi cuenta</button><span id="delete-message" role="status"></span></span></span>
     </footer>
 
   </main>
@@ -292,7 +289,7 @@
   </dialog>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="app.js?v=23"></script>
-  <script src="comunidad.js?v=23"></script>
+  <script src="app.js?v=24"></script>
+  <script src="comunidad.js?v=24"></script>
 </body>
 </html>

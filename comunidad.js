@@ -60,6 +60,8 @@
     enter.style.display = me ? "" : "none";
     if (!me) closeCommunity();
     startNotifications();
+    const footerAccount = $("footer-account");
+    if (footerAccount) footerAccount.hidden = !me;
   }
 
   // Copia nombre, país, descripción y foto desde user_metadata a la tabla profiles
@@ -1561,6 +1563,16 @@
     };
     card.append(b);
     return card;
+  }
+
+  /* ---------- "Sobre mí" que muestra todo el texto ---------- */
+  const descTa = $("profile-description");
+  const profileDlg = $("profile-dialog");
+  if (descTa && profileDlg) {
+    const fitDesc = () => { descTa.style.height = "auto"; descTa.style.height = descTa.scrollHeight + 2 + "px"; };
+    descTa.addEventListener("input", fitDesc);
+    new MutationObserver(() => { if (profileDlg.open) requestAnimationFrame(fitDesc); })
+      .observe(profileDlg, { attributes: true, attributeFilter: ["open"] });
   }
 
   /* ---------- Eliminar cuenta ---------- */
