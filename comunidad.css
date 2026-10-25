@@ -426,10 +426,6 @@ footer a, .signup-consent a { color: var(--gold-light); }
 .photo-strip img { flex: none; width: 72px; height: 92px; object-fit: contain; border-radius: 10px; background: #0b0c0f; }
 .muted-note { display: block; margin-top: 8px; color: var(--muted); }
 
-/* Botones dentro de la tarjeta de Descubrir */
-.c-card.full { user-select: none; -webkit-user-select: none; }
-.c-card-acts { margin-top: 14px; justify-content: space-between; }
-.c-card .c-round { background: rgba(14, 10, 16, .72); }
-.c-round.boost { color: #c792ff; border-color: rgba(199, 146, 255, .5); }
-.c-round.small { width: 48px; height: 48px; }
-.c-round.big { width: 62px; height: 62px; }
+/* Boost en la tarjeta y tarjeta de ejemplo */
+.c-round.boost { color: #c9a8ff; border-color: rgba(201, 168, 255, .5); }
+.c-card-ph { position: absolute; inset: 0; display: grid; place-items: center; font: 600 130px Georgia, serif; color: rgba(255, 255, 255, .16); }
