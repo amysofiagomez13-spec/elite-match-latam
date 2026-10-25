@@ -304,7 +304,7 @@
   function paintBoost() {
     boostBtn.innerHTML = SVG_OPEN + '<path d="M13 2L4 14h7l-1 8 9-12h-7z"/></svg>';
     const active = perks && perks.boost_until && new Date(perks.boost_until) > new Date();
-    boostBtn.append(el("span", "", active ? "Destacado" : "Destacar"));
+    boostBtn.append(el("span", "", active ? "Perfil destacado" : "Destacar mi perfil"));
   }
   async function loadPerks() {
     const { data } = await sb.rpc("get_my_perks").maybeSingle();
@@ -336,7 +336,7 @@
   const likeError = (e) => {
     const m = String((e && e.message) || "");
     if (isBlocked(e)) return BLOCK_MSG;
-    if (m.includes("limite_estrellas")) return "Ya usaste tus estrellas de hoy.";
+    if (m.includes("limite_estrellas")) return "Ya usaste tus boosts de hoy.";
     if (m.includes("limite_mensajes_like")) return "Ya usaste tus mensajes con «Me gusta» de hoy.";
     return "No se pudo enviar. Inténtalo de nuevo.";
   };
@@ -404,6 +404,7 @@
       return;
     }
     const card = el("article", "c-card full");
+    let moved = false;
     const pics = p.photos && p.photos.length ? p.photos : (p.avatar_path ? [p.avatar_path] : []);
     if (pics.length) {
       const ph = document.createElement("img");
@@ -421,6 +422,8 @@
         dots.forEach((d) => bar.append(d));
         card.append(bar);
         card.addEventListener("click", (ev) => {
+          if (moved) { moved = false; return; }
+          if (ev.target.closest("button")) return;
           const r = card.getBoundingClientRect();
           if (ev.clientY - r.top > r.height * 0.7) return;
           idx = ev.clientX - r.left < r.width / 2 ? (idx - 1 + pics.length) % pics.length : (idx + 1) % pics.length;
@@ -430,7 +433,7 @@
       showPic();
     }
     if (p.is_verified) card.append(el("span", "c-badge top", "Identidad verificada"));
-    if (p.star) card.append(el("span", "c-badge top left", "Te dio una estrella"));
+    if (p.star) card.append(el("span", "c-badge top left", "Te dio un boost"));
     const info = el("div", "c-card-info");
     info.append(el("h2", "", (p.full_name || "Sin nombre") + ", " + p.age));
     if (p.country) info.append(el("p", "c-muted", p.country));
@@ -446,23 +449,52 @@
     }
     card.append(info);
 
-    const acts = el("div", "c-acts c-acts5");
-    const undo = roundBtn("small", "Deshacer", '<path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/>', () => {
+    const acts = el("div", "c-acts c-acts5 c-card-acts");
+    const undo = roundBtn("small", "Retroceder", '<path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/>', () => {
       if (lastPassed) { deck.unshift(lastPassed); lastPassed = null; renderCard(); }
-      else say("No hay nada que deshacer.");
+      else say("No hay nada que retroceder.");
     });
-    const pass = roundBtn("big", "Pasar", '<path d="M6 6l12 12M18 6L6 18"/>', () => { lastPassed = deck.shift(); renderCard(); });
-    const star = roundBtn("small star", "Dar una estrella", '<path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z"/>', () => doLike(p, star, { kind: "super" }), perks ? perks.super_left : null);
+    const pass = roundBtn("small", "Pasar", '<path d="M6 6l12 12M18 6L6 18"/>', () => { lastPassed = deck.shift(); renderCard(); });
     const like = roundBtn("big heart", "Me gusta", '<path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.5A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/>', () => doLike(p, like, {}));
+    const boost = roundBtn("small boost", "Boost: destacar a esta persona", '<path d="M13 2L4 14h7l-1 8 9-12h-7z"/>', () => doLike(p, boost, { kind: "super" }), perks ? perks.super_left : null);
     const note = roundBtn("small note", "Me gusta con mensaje", '<path d="M4 12l16-8-6 16-3-7z"/>', async () => {
       const text = await askNote(p);
       if (text) doLike(p, note, { note: text });
     }, perks ? perks.notes_left : null);
-    acts.append(undo, pass, star, like, note);
+    acts.append(undo, pass, like, boost, note);
+    info.append(acts);
+
+    // Deslizar la tarjeta: a la derecha "Me gusta", a la izquierda "Pasar"
+    {
+      let sx = 0, dx = 0, drag = false;
+      card.style.touchAction = "pan-y";
+      card.addEventListener("pointerdown", (e) => {
+        if (e.target.closest("button")) return;
+        drag = true; moved = false; dx = 0; sx = e.clientX;
+        card.style.transition = "none";
+        try { card.setPointerCapture(e.pointerId); } catch (err) { /* nada */ }
+      });
+      card.addEventListener("pointermove", (e) => {
+        if (!drag) return;
+        dx = e.clientX - sx;
+        if (Math.abs(dx) > 8) moved = true;
+        card.style.transform = "translateX(" + dx + "px) rotate(" + dx / 25 + "deg)";
+      });
+      const release = () => {
+        if (!drag) return;
+        drag = false;
+        card.style.transition = "transform .2s ease";
+        if (dx > 110) { card.style.transform = "translateX(130%) rotate(14deg)"; setTimeout(() => doLike(p, like, {}), 180); }
+        else if (dx < -110) { card.style.transform = "translateX(-130%) rotate(-14deg)"; setTimeout(() => { lastPassed = deck.shift(); renderCard(); }, 180); }
+        else card.style.transform = "";
+      };
+      card.addEventListener("pointerup", release);
+      card.addEventListener("pointercancel", release);
+    }
     const rep = el("button", "c-link", "Reportar este perfil");
     rep.type = "button";
     rep.onclick = () => reportUser(p.id, p.statusRow);
-    box.replaceChildren(...top(), card, acts, rep);
+    box.replaceChildren(...top(), card, rep);
   }
 
   async function doLike(p, btn, opts) {
@@ -476,11 +508,12 @@
       console.error(error);
       say(likeError(error));
       btn.disabled = false;
+      renderCard();
       return;
     }
     const { data } = await sb.rpc("get_my_matches").select("match_id").eq("other_id", p.id).maybeSingle();
     say(data ? "¡Es una coincidencia! Ya pueden escribirse."
-      : opts.kind === "super" ? "Estrella enviada."
+      : opts.kind === "super" ? "Boost enviado."
       : opts.note ? "Me gusta con mensaje enviado." : "Me gusta enviado.");
     deck.shift();
     await loadPerks();
@@ -1287,9 +1320,9 @@
       const tl = tmap.get(p.tier);
       if (tl) {
         const ul = el("ul", "c-benefits");
-        [tl.super_likes_per_day + " estrellas por día",
+        [tl.super_likes_per_day + " boosts por día para destacar a quien te gusta",
          tl.notes_per_day + " «Me gusta» con mensaje por día",
-         tl.boosts_per_week + " destaques por semana (" + tl.boost_minutes + " min cada uno)"].forEach((t) => ul.append(el("li", "", t)));
+         tl.boosts_per_week + " destaques de tu perfil por semana (" + tl.boost_minutes + " min cada uno)"].forEach((t) => ul.append(el("li", "", t)));
         card.append(ul);
       }
       card.append(el("p", "", p.price_cop ? "$" + Number(p.price_cop).toLocaleString("es-CO") + " COP" : "Precio por definir"));
@@ -1753,7 +1786,7 @@
       who.append(el("b", "", (r.full_name || "Sin nombre") + (r.age_years ? ", " + r.age_years : "")), el("small", "c-muted", r.country || ""));
       head.append(avatar(r.avatar_path, r.full_name), who);
       card.append(head);
-      if (r.kind === "super") card.append(el("span", "c-chip", "Te dio una estrella"));
+      if (r.kind === "super") card.append(el("span", "c-chip", "Te dio un boost"));
       if (r.note) card.append(el("p", "c-pbody", "“" + r.note + "”"));
       if (r.intent && INTENTS[r.intent]) card.append(el("span", "c-chip", "Busca: " + INTENTS[r.intent]));
       const pics = r.photos && r.photos.length ? r.photos : (r.avatar_path ? [r.avatar_path] : []);
