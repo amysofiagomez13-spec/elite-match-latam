@@ -22,9 +22,9 @@
   let banner = null; // aviso de perfil incompleto en Descubrir
   let stories = null; // fila de estados arriba de Descubrir
   let countryFilter = null; // país elegido en el botón del mundo
+  let perks = null; // estrellas, mensajes y destaques disponibles
+  let lastPassed = null; // última persona a la que se le dio "Pasar" (para deshacer)
   let access = null; // estado de la prueba gratuita y la suscripción
-  let perks = null; // cupos del plan: super likes, mensajes, boost
-  let undoStack = []; // perfiles que pasaste, para poder deshacer
   let accessTimer = null;
   let view = "discover"; // pantalla abierta
 
@@ -205,7 +205,6 @@
     cleanupExpiredPosts();
     maybeOnboard();
     refreshLikesBadge();
-    loadPerks();
     community.hidden = false;
     document.body.style.overflow = "hidden";
     showTab("discover");
@@ -244,6 +243,7 @@
     }
     banner = await profileBanner();
     stories = await storiesBar();
+    await loadPerks();
     renderCard();
   }
 
@@ -295,17 +295,94 @@
     worldBtn.append(el("span", "", countryFilter ? countryFilter : "Todo el mundo"));
   }
   paintWorld();
+  // Destacar mi perfil (boost)
   const boostBtn = el("button", "c-world c-boost");
   boostBtn.type = "button";
-  boostBtn.addEventListener("click", () => openBoost());
+  const topRow = el("div", "c-toprow");
+  topRow.append(worldBtn, boostBtn);
+
   function paintBoost() {
     boostBtn.innerHTML = SVG_OPEN + '<path d="M13 2L4 14h7l-1 8 9-12h-7z"/></svg>';
-    boostBtn.append(el("span", "", perks && perks.boost_until ? "Boost activo" : "Boost"));
+    const active = perks && perks.boost_until && new Date(perks.boost_until) > new Date();
+    boostBtn.append(el("span", "", active ? "Destacado" : "Destacar"));
   }
+  async function loadPerks() {
+    const { data } = await sb.rpc("get_my_perks").maybeSingle();
+    perks = data || null;
+    paintBoost();
+  }
+  async function activateBoost() {
+    if (!perks) await loadPerks();
+    if (perks && perks.boost_until && new Date(perks.boost_until) > new Date()) {
+      say("Tu perfil ya está destacado hasta las " + new Date(perks.boost_until).toLocaleTimeString("es-CO", { hour: "2-digit", minute: "2-digit" }) + ".");
+      return;
+    }
+    if (!perks || perks.boosts_left <= 0) {
+      if (perks && perks.tier === "free") { say("Destacar tu perfil requiere una suscripción."); showTab("plans"); }
+      else say("Ya usaste tus destaques de esta semana.");
+      return;
+    }
+    if (!confirm("¿Destacar tu perfil durante " + perks.boost_minutes + " minutos? Aparecerás primero a otras personas. Te quedan " + perks.boosts_left + " esta semana.")) return;
+    const { error } = await sb.rpc("activate_boost");
+    if (error) { console.error(error); say("No se pudo destacar tu perfil."); return; }
+    say("Tu perfil está destacado.");
+    await loadPerks();
+  }
+  boostBtn.addEventListener("click", activateBoost);
   paintBoost();
-  const toprow = el("div", "c-toprow");
-  toprow.append(worldBtn, boostBtn);
-  const top = () => [...(banner ? [banner] : []), toprow, ...(stories ? [stories] : [])];
+
+  const top = () => [...(banner ? [banner] : []), topRow, ...(stories ? [stories] : [])];
+
+  const likeError = (e) => {
+    const m = String((e && e.message) || "");
+    if (isBlocked(e)) return BLOCK_MSG;
+    if (m.includes("limite_estrellas")) return "Ya usaste tus estrellas de hoy.";
+    if (m.includes("limite_mensajes_like")) return "Ya usaste tus mensajes con «Me gusta» de hoy.";
+    return "No se pudo enviar. Inténtalo de nuevo.";
+  };
+
+  function roundBtn(cls, label, svgInner, onClick, badge) {
+    const b = el("button", "c-round " + cls);
+    b.type = "button";
+    b.setAttribute("aria-label", label);
+    b.innerHTML = SVG_OPEN + svgInner + "</svg>";
+    if (badge !== undefined && badge !== null) b.append(el("span", "c-round-badge", String(badge)));
+    b.addEventListener("click", onClick);
+    return b;
+  }
+
+  // Ventana para escribir un mensaje junto con el "Me gusta"
+  function askNote(p) {
+    return new Promise((resolve) => {
+      const over = el("div", "c-onboard");
+      over.setAttribute("role", "dialog");
+      over.setAttribute("aria-modal", "true");
+      over.setAttribute("aria-label", "Me gusta con mensaje");
+      const card = el("div", "c-ob-card");
+      const ta = document.createElement("textarea");
+      ta.rows = 3;
+      ta.maxLength = 140;
+      ta.placeholder = "Escribe algo para destacarte (máx. 140)";
+      ta.setAttribute("aria-label", "Mensaje");
+      const nav = el("div", "c-ob-nav");
+      const cancel = el("button", "c-btn ghost", "Cancelar");
+      cancel.type = "button";
+      const send = el("button", "c-btn gold", "Enviar");
+      send.type = "button";
+      nav.append(cancel, send);
+      card.append(
+        el("h2", "", "Me gusta con mensaje"),
+        el("p", "c-muted", "Se envía junto con tu «Me gusta» a " + (p.full_name || "esta persona").split(" ")[0] + ". Sin teléfonos, redes ni pedir dinero."),
+        ta, nav
+      );
+      over.append(card);
+      document.body.append(over);
+      ta.focus();
+      const done = (v) => { over.remove(); resolve(v); };
+      cancel.onclick = () => done(null);
+      send.onclick = () => { const t = ta.value.trim(); if (!t) { ta.focus(); return; } done(t); };
+    });
+  }
 
   function renderCard() {
     const box = views.discover;
@@ -353,10 +430,12 @@
       showPic();
     }
     if (p.is_verified) card.append(el("span", "c-badge top", "Identidad verificada"));
+    if (p.star) card.append(el("span", "c-badge top left", "Te dio una estrella"));
     const info = el("div", "c-card-info");
     info.append(el("h2", "", (p.full_name || "Sin nombre") + ", " + p.age));
     if (p.country) info.append(el("p", "c-muted", p.country));
     if (p.intent && INTENTS[p.intent]) info.append(el("span", "c-chip", "Busca: " + INTENTS[p.intent]));
+    if (p.boosted) info.append(el("span", "c-chip", "Destacado"));
     if (p.description) info.append(el("p", "c-bio", p.description));
     if (p.status || p.statusImage) {
       const st = el("div", "c-status");
@@ -367,57 +446,45 @@
     }
     card.append(info);
 
-    const acts = el("div", "c-actions");
-    const circle = (cls, label, svg, fn) => {
-      const btn = el("button", "c-circle " + cls);
-      btn.type = "button";
-      btn.setAttribute("aria-label", label);
-      btn.innerHTML = svg;
-      btn.onclick = fn;
-      return btn;
-    };
-    const rewindBtn = circle("", "Deshacer", SVG_OPEN + '<path d="M4 4v6h6"/><path d="M5 15a8 8 0 1 0 2-9L4 10"/></svg>', () => {
-      if (!((perks && perks.rewind) || (access && access.free_mode))) { say("Deshacer es parte de los planes."); return; }
-      if (!undoStack.length) { say("No hay nada que deshacer."); return; }
-      deck.unshift(undoStack.pop());
-      renderCard();
+    const acts = el("div", "c-acts c-acts5");
+    const undo = roundBtn("small", "Deshacer", '<path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/>', () => {
+      if (lastPassed) { deck.unshift(lastPassed); lastPassed = null; renderCard(); }
+      else say("No hay nada que deshacer.");
     });
-    const passBtn = circle("big", "Pasar", SVG_OPEN + '<path d="M6 6l12 12M18 6L6 18"/></svg>', () => {
-      undoStack.push(deck.shift());
-      if (undoStack.length > 10) undoStack.shift();
-      renderCard();
-    });
-    const starBtn = circle("star", "Super Like", SVG_OPEN + '<path d="M12 3l2.8 5.8 6.2.9-4.5 4.4 1.1 6.2L12 17.3 6.4 20.3l1.1-6.2L3 9.7l6.2-.9z"/></svg>', () => superSheet(p, "super"));
-    const likeBtn = circle("big gold", "Me gusta", '<svg width="30" height="30" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.5A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/></svg>', () => doLike(p, likeBtn));
-    const noteBtn = circle("star", "Me gusta con mensaje", SVG_OPEN + '<path d="M4 12l16-8-6 16-3-7z"/></svg>', () => superSheet(p, "note"));
-    acts.append(rewindBtn, passBtn, starBtn, likeBtn, noteBtn);
+    const pass = roundBtn("big", "Pasar", '<path d="M6 6l12 12M18 6L6 18"/>', () => { lastPassed = deck.shift(); renderCard(); });
+    const star = roundBtn("small star", "Dar una estrella", '<path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z"/>', () => doLike(p, star, { kind: "super" }), perks ? perks.super_left : null);
+    const like = roundBtn("big heart", "Me gusta", '<path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.5A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/>', () => doLike(p, like, {}));
+    const note = roundBtn("small note", "Me gusta con mensaje", '<path d="M4 12l16-8-6 16-3-7z"/>', async () => {
+      const text = await askNote(p);
+      if (text) doLike(p, note, { note: text });
+    }, perks ? perks.notes_left : null);
+    acts.append(undo, pass, star, like, note);
     const rep = el("button", "c-link", "Reportar este perfil");
     rep.type = "button";
     rep.onclick = () => reportUser(p.id, p.statusRow);
     box.replaceChildren(...top(), card, acts, rep);
   }
 
-  async function doLike(p, btn, extra) {
-    if (btn) btn.disabled = true;
-    const row = { from_user: me.id, to_user: p.id, ...(extra || {}) };
+  async function doLike(p, btn, opts) {
+    opts = opts || {};
+    btn.disabled = true;
+    const row = { from_user: me.id, to_user: p.id };
+    if (opts.kind === "super") row.kind = "super";
+    if (opts.note) row.note = opts.note;
     const { error } = await sb.from("likes").insert(row);
     if (error && error.code !== "23505") {
       console.error(error);
-      const m = String(error.message || "");
-      say(isBlocked(error) ? BLOCK_MSG
-        : m.includes("limite_super_likes") ? "Ya usaste tus Super Likes de hoy."
-        : m.includes("limite_notas") ? "Ya usaste tus mensajes destacados de hoy."
-        : "No se pudo enviar. Inténtalo de nuevo.");
-      if (btn) btn.disabled = false;
-      return false;
+      say(likeError(error));
+      btn.disabled = false;
+      return;
     }
     const { data } = await sb.rpc("get_my_matches").select("match_id").eq("other_id", p.id).maybeSingle();
-    say(data ? "¡Es una coincidencia! Ya pueden escribirse." : (row.kind === "super" ? "Super Like enviado." : "Me gusta enviado."));
-    undoStack = [];
+    say(data ? "¡Es una coincidencia! Ya pueden escribirse."
+      : opts.kind === "super" ? "Estrella enviada."
+      : opts.note ? "Me gusta con mensaje enviado." : "Me gusta enviado.");
     deck.shift();
-    loadPerks();
+    await loadPerks();
     renderCard();
-    return true;
   }
 
   /* ---------- Estados (24 horas) ---------- */
@@ -1179,9 +1246,10 @@
     const box = views.plans;
     box.replaceChildren(el("p", "c-empty", "Cargando…"));
     await loadAccess();
-    const { data: plans, error } = await sb.from("plans").select("id,name,days,price_cop,tier").eq("active", true).order("sort");
-    const { data: lims } = await sb.rpc("get_tier_limits");
-    const limMap = new Map((lims || []).map((l) => [l.tier, l]));
+    const { data: plans0, error } = await sb.from("plans").select("id,name,days,price_cop,tier").eq("active", true);
+    const { data: tiers } = await sb.from("tier_limits").select("*");
+    const tmap = new Map((tiers || []).map((t) => [t.tier, t]));
+    const plans = (plans0 || []).sort((a, b) => ((tmap.get(a.tier) || {}).rank || 0) - ((tmap.get(b.tier) || {}).rank || 0));
     if (error) {
       console.error(error);
       box.replaceChildren(el("p", "c-empty", "No se pudieron cargar los planes."));
@@ -1216,14 +1284,15 @@
     (plans || []).forEach((p) => {
       const card = el("div", "c-plan");
       card.append(el("b", "", p.name), el("small", "c-muted", p.days + " días"));
-      card.append(el("p", "", p.price_cop ? "$" + Number(p.price_cop).toLocaleString("es-CO") + " COP" : "Precio por definir"));
-      const L = limMap.get(p.tier);
-      if (L) {
+      const tl = tmap.get(p.tier);
+      if (tl) {
         const ul = el("ul", "c-benefits");
-        [L.super_likes_day + " Super Likes al día", L.notes_day + " «Me gusta» con mensaje al día", L.boosts_week + " Boost por semana (" + L.boost_minutes + " min)", L.rewind ? "Deshacer el último «Pasar»" : ""]
-          .filter(Boolean).forEach((t) => ul.append(el("li", "", t)));
+        [tl.super_likes_per_day + " estrellas por día",
+         tl.notes_per_day + " «Me gusta» con mensaje por día",
+         tl.boosts_per_week + " destaques por semana (" + tl.boost_minutes + " min cada uno)"].forEach((t) => ul.append(el("li", "", t)));
         card.append(ul);
       }
+      card.append(el("p", "", p.price_cop ? "$" + Number(p.price_cop).toLocaleString("es-CO") + " COP" : "Precio por definir"));
       const buy = el("button", "c-btn gold", "Suscribirme");
       buy.type = "button";
       buy.addEventListener("click", () => subscribe(p));
@@ -1635,137 +1704,8 @@
   if (descTa && profileDlg) {
     const fitDesc = () => { descTa.style.height = "auto"; descTa.style.height = descTa.scrollHeight + 2 + "px"; };
     descTa.addEventListener("input", fitDesc);
-    new MutationObserver(() => { if (profileDlg.open) { requestAnimationFrame(fitDesc); renderStrip(); } })
+    new MutationObserver(() => { if (profileDlg.open) requestAnimationFrame(fitDesc); })
       .observe(profileDlg, { attributes: true, attributeFilter: ["open"] });
-  }
-
-  /* ---------- Cupos, Super Like, mensaje destacado y Boost ---------- */
-  async function loadPerks() {
-    if (!me) return;
-    const { data, error } = await sb.rpc("get_my_perks").maybeSingle();
-    if (error) { console.error(error); return; }
-    perks = data;
-    paintBoost();
-  }
-
-  // Ventana emergente sencilla con botones
-  function sheet(cfg) {
-    const over = el("div", "c-onboard");
-    over.setAttribute("role", "dialog");
-    over.setAttribute("aria-modal", "true");
-    over.setAttribute("aria-label", cfg.title);
-    const card = el("div", "c-ob-card");
-    card.append(el("h2", "", cfg.title));
-    if (cfg.text) card.append(el("p", "c-muted", cfg.text));
-    if (cfg.body) card.append(cfg.body);
-    const msg = el("p", "c-ob-msg");
-    msg.setAttribute("role", "status");
-    card.append(msg);
-    const nav = el("div", "c-ob-nav");
-    const api = { close: () => over.remove(), say: (t) => (msg.textContent = t) };
-    (cfg.buttons || []).forEach((b) => {
-      const btn = el("button", "c-btn " + (b.kind || "ghost"), b.label);
-      btn.type = "button";
-      btn.onclick = async () => { btn.disabled = true; try { await b.onClick(api); } finally { btn.disabled = false; } };
-      nav.append(btn);
-    });
-    card.append(nav);
-    over.append(card);
-    document.body.append(over);
-    return api;
-  }
-
-  function superSheet(p, kind) {
-    const isSuper = kind === "super";
-    const left = perks ? (isSuper ? perks.super_left : perks.notes_left) : 0;
-    const title = isSuper ? "Super Like para " + (p.full_name || "esta persona") : "«Me gusta» con mensaje";
-    if (left <= 0) {
-      sheet({
-        title,
-        text: (isSuper ? "Ya usaste tus Super Likes de hoy." : "Ya usaste tus mensajes destacados de hoy.") + " Se renuevan en 24 horas, o puedes tener más con un plan.",
-        buttons: [
-          { label: "Cerrar", kind: "ghost", onClick: (s) => s.close() },
-          { label: "Ver planes", kind: "gold", onClick: (s) => { s.close(); showTab("plans"); } },
-        ],
-      });
-      return;
-    }
-    const ta = document.createElement("textarea");
-    ta.rows = 3;
-    ta.maxLength = 140;
-    ta.placeholder = isSuper ? "Mensaje (opcional)" : "Escribe tu mensaje";
-    ta.setAttribute("aria-label", "Mensaje");
-    sheet({
-      title,
-      text: (isSuper ? "Destaca tu «Me gusta»: la otra persona lo verá primero." : "Tu mensaje llega junto con tu «Me gusta».") + " Te quedan " + left + " hoy.",
-      body: ta,
-      buttons: [
-        { label: "Cancelar", kind: "ghost", onClick: (s) => s.close() },
-        {
-          label: "Enviar", kind: "gold",
-          onClick: async (s) => {
-            const note = ta.value.trim();
-            if (!isSuper && !note) { s.say("Escribe un mensaje."); return; }
-            const extra = isSuper ? { kind: "super" } : {};
-            if (note) extra.note = note;
-            s.say("Enviando…");
-            const ok = await doLike(p, null, extra);
-            if (ok) s.close(); else s.say("No se pudo enviar. Revisa el mensaje.");
-          },
-        },
-      ],
-    });
-  }
-
-  function openBoost() {
-    if (perks && perks.boost_until) {
-      say("Tu Boost está activo hasta las " + new Date(perks.boost_until).toLocaleTimeString("es-CO", { hour: "2-digit", minute: "2-digit" }) + ".");
-      return;
-    }
-    const per = perks || {};
-    const plansBtn = { label: "Ver planes", kind: "gold", onClick: (s) => { s.close(); showTab("plans"); } };
-    const closeBtn = { label: "Cerrar", kind: "ghost", onClick: (s) => s.close() };
-    if (!per.boost_minutes) {
-      sheet({ title: "Boost", text: "El Boost pone tu perfil primero en Descubrir durante un rato. Es parte de los planes.", buttons: [closeBtn, plansBtn] });
-      return;
-    }
-    if (per.boosts_left <= 0) {
-      sheet({ title: "Boost", text: "Ya usaste tus Boost de esta semana.", buttons: [closeBtn, plansBtn] });
-      return;
-    }
-    sheet({
-      title: "Boost",
-      text: "Tu perfil aparecerá primero en Descubrir durante " + per.boost_minutes + " minutos. Te quedan " + per.boosts_left + " esta semana.",
-      buttons: [
-        { label: "Cancelar", kind: "ghost", onClick: (s) => s.close() },
-        {
-          label: "Activar Boost", kind: "gold",
-          onClick: async (s) => {
-            const { error } = await sb.rpc("activate_boost");
-            if (error) { console.error(error); s.say("No se pudo activar el Boost."); return; }
-            s.close();
-            say("¡Boost activado!");
-            loadPerks();
-          },
-        },
-      ],
-    });
-  }
-
-  // Cuadro de fotos dentro de Mi perfil
-  async function renderStrip() {
-    const strip = $("profile-strip");
-    if (!strip || !me) return;
-    const rows = await listPhotos();
-    strip.replaceChildren();
-    if (!rows || !rows.length) { strip.append(el("p", "c-muted", "Aún no tienes fotos. Toca «Editar fotos» para añadir.")); return; }
-    rows.forEach((r, i) => {
-      const img = document.createElement("img");
-      img.src = publicUrl(r.path);
-      img.alt = "Foto " + (i + 1);
-      if (i === 0) img.className = "main";
-      strip.append(img);
-    });
   }
 
   /* ---------- Likes recibidos ---------- */
@@ -1813,13 +1753,9 @@
       who.append(el("b", "", (r.full_name || "Sin nombre") + (r.age_years ? ", " + r.age_years : "")), el("small", "c-muted", r.country || ""));
       head.append(avatar(r.avatar_path, r.full_name), who);
       card.append(head);
-      if (r.kind === "super") card.append(el("span", "c-badge", "★ Super Like"));
+      if (r.kind === "super") card.append(el("span", "c-chip", "Te dio una estrella"));
+      if (r.note) card.append(el("p", "c-pbody", "“" + r.note + "”"));
       if (r.intent && INTENTS[r.intent]) card.append(el("span", "c-chip", "Busca: " + INTENTS[r.intent]));
-      if (r.note) {
-        const q = el("div", "c-status");
-        q.append(el("small", "c-muted", "Su mensaje"), el("p", "", r.note));
-        card.append(q);
-      }
       const pics = r.photos && r.photos.length ? r.photos : (r.avatar_path ? [r.avatar_path] : []);
       if (pics[0]) card.append(statusImg(pics[0]));
       if (r.description) card.append(el("p", "c-pbody", r.description));
@@ -1846,6 +1782,23 @@
       parts.push(card);
     });
     box.replaceChildren(...parts);
+  }
+
+  /* ---------- Recuadro de fotos en Mi perfil ---------- */
+  async function renderStrip() {
+    const strip = $("photo-strip");
+    if (!strip || !me) return;
+    const rows = await listPhotos();
+    if (!rows) return;
+    strip.replaceChildren(...(rows.length
+      ? rows.map((r, i) => { const im = document.createElement("img"); im.src = publicUrl(r.path); im.alt = "Foto " + (i + 1); im.loading = "lazy"; return im; })
+      : [el("p", "c-muted", "Aún no tienes fotos.")]));
+    const tip = $("photo-tip");
+    if (tip) tip.textContent = rows.length < 3 ? "Consejo: agrega más fotos para recibir más «Me gusta»." : rows.length + " de 6 fotos";
+  }
+  if (profileDlg) {
+    new MutationObserver(() => { if (profileDlg.open) renderStrip(); })
+      .observe(profileDlg, { attributes: true, attributeFilter: ["open"] });
   }
 
   /* ---------- Eliminar cuenta ---------- */
